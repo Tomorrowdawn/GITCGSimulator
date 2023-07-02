@@ -1,19 +1,20 @@
 from dataclasses import dataclass, asdict
 from typing import Tuple, List, Any, Mapping, Union
-from ..card.card import Card, Deck
+from src.card.card import Card, Deck, Box
+from src.character.character import Character
 from Event import Event
 import numpy as np
-
+from copy import deepcopy
 
 @dataclass
 class Location:
     player_id:int
-    area:str
+    area:str##Char, Support, Summon, TeamBuff, Hand
     index:int
     
     ###仅用于装备/角色状态定位
-    subarea:str
-    offset:int
+    subarea:str### empty if you only need character. else it's weapon/artifact/talent/buff
+    offset:int##only available if subarea=buff.
     
 @dataclass
 class DiceInstance:
@@ -45,8 +46,39 @@ class DicePattern:
 
 Profile = Tuple[str,List[Any]]
 
+class PlayerState:
+    def __init__(self, box:Union[Box,None]):
+        if box is None:
+            return
+        deck = box.deck
+        #chars = box.chars
+        deck = Deck(deck).export()
+        
+        self.deck = deck###list of str.
+        self.hand = []##list of str
+        
+        
+        ## list of (cls,profile). 即(class, parameters)形式
+
+        #self.char = chars###需要char那边提供工具函数将其转换成标准形式. box中只有str信息.
+        self.teambuff = []
+        self.support = []
+        self.summon = []
+        self.dice = DiceInstance()
+        self.history = {
+            "phase":'start','dieRN':False
+        }
+        pass
+    def clone(self):
+        return deepcopy(self)
+        pass
+    def get(self, loc:Location)->Union[Profile, None]:
+        pass
+    def numpy(self)->np.ndarray:
+        pass
+
 class GameState:
-    def __init__(self, deck1:Deck, deck2:Deck):
+    def __init__(self,box1:Box, box2:Box):
         pass
     def clone(self):
         pass
