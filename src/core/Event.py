@@ -1,7 +1,7 @@
 from dataclasses import dataclass, replace
 from enum import Enum
 from typing import List, Tuple, Dict, Callable, Mapping, Any
-from GameState import Location, DiceInstance, DicePattern
+from base import Location, DiceInstance, DicePattern
 
 @dataclass
 class Event:
