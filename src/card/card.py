@@ -1,8 +1,16 @@
+from __future__ import annotations
+
 import sys
 sys.path.append("..")
+sys.path.append("../..")
 
-from src.core.GameState import GameState, GameInstance, Profile
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.core.GameInstance import GameInstance
 
+
+from src.core.GameState import GameState, Profile
+from src.core.Event import Event
 
 from abc import ABCMeta, abstractmethod
 from typing import List, Tuple, Mapping, Union, Any, Type
@@ -15,34 +23,42 @@ class Card(metaclass = ABCMeta):
         ##
         pass
     @abstractmethod
-    def play(self, g:GameInstance):
+    def play(self, g:GameInstance)->List[Event]:
+        pass
+    
+    @abstractmethod
+    def valid(self, g:GameInstance)->bool:
         pass
     
 import src.character.character as Char
-
-class Box:
-    def __init__(self, box):
-        chars, cards = box
-        self.chars = chars
-        self.deck = cards
+import random
 
 class Deck:
     """Deck中可能维护activated cards. 现阶段暂时不准备. 
     唯一的定向检索食品袋可以手写所有食品的集合然后取交集.
     """
     
-    def __init__(self, deck:Mapping[str,int]) -> None:
+    def __init__(self, deck:Mapping[str,int] = None) -> None:
+        if deck is None:
+            self.pile = []
+        else:
+            pass
         pass
     def export(self)->List[str]:
         pass
-    def draw(self, num, cond = None):
+    def __getitem__(self, index):
+        return self.pile[index]
+    def draw(self, num, tags = None)->List[str]:
         pass
+    def swapin(self, cards:List[str]):
+        pass
+    
 
 class Hand(object):
     def __init__(self, hand:List[str]) -> None:
-        ####需要激活
-        pass
-        #self.hand = hand
+        self.hand = hand
+    def __getitem__(self, index):
+        return self.hand[index]
     def export(self):
         return self.hand
     def add(self, card:str):

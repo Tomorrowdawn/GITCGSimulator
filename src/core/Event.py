@@ -1,7 +1,7 @@
 from dataclasses import dataclass, replace
 from enum import Enum
 from typing import List, Tuple, Dict, Callable, Mapping, Any
-from base import Location, DiceInstance, DicePattern
+from src.core.base import Location, DiceInstance, DicePattern
 
 @dataclass
 class Event:
@@ -38,7 +38,7 @@ class Switch(Event):
     ##主动切人和被动切人: 如果source_id = -1,就是主动. 否则就是被动.
 @dataclass
 class Death(Event):
-    char_loc:Location
+    char_loc:Location##如果是前台死了,要触发deathswitch阶段.
 
 @dataclass 
 class SwapMove(Event):
@@ -47,16 +47,25 @@ class SwapMove(Event):
     
 @dataclass
 class GenerateDice(Event):
-    dice_instance:dict
+    dice_instance:DiceInstance
     ###dice_instance该实例就是最终结果.
     #例如卯师傅等随机骰子卡, 在外部确定后传过来即可.
+    
+@dataclass
+class Roll(Event):
+    ###投掷结果.
+    ###3费圣遗物,群玉阁修改enforce_dice
+    dice_instance:DiceInstance
+    enforce_dice:DiceInstance = DiceInstance()
+    ##execute在汇总后用enforce_dice替换掉dice_instance中的部分.
+    ##Roll也会修改mover, 但只是单纯因为无法做到同时掷骰而已, 不会触发SwapMove.
     
 @dataclass
 class DicePreCal(Event):
     event_instance:Any##实际上只是其中几个, 例如切人Switch. 
     ## 这个地方会初始化一个无效事件(event_id=-1). 但是必要的参数仍需要添加(例如playcard的offset(否则监听器无法确定是哪张卡))
     ##只是为了type能够正确执行(因为传类名会出错)
-    dice_pattern:dict
+    dice_pattern:DicePattern
     ##该事件发出时, 骰子消耗还未执行
     ##监听器监听此事件, 不修改自己的状态, 但是修改dice_pattern.
     ##某些卡牌， 例如雷楔，天赋卡，同时会产生一个战斗行动
@@ -70,10 +79,8 @@ class DicePreCal(Event):
 @dataclass
 class UseKit(Event):
     cur_char:Location
-    Kit_Type:str##na,skill,burst
-    Kit_func:Any
-    ##直接将角色实例的方法传入
-    ##Kit_func(source_id, game)
+    kit:str##na,skill,burst, sp1, sp2
+    kit_type:str##na,skill,burst
     dice_cost:DiceInstance = None
 
 class DMGType(Enum):
@@ -97,6 +104,8 @@ class damage:
 @dataclass
 class DMGTypeCheck(Event):
     dmg_list:List[damage]
+    
+RawDMG = DMGTypeCheck ##别名
     
 @dataclass
 class DMG(Event):
@@ -132,6 +141,7 @@ class Reaction(Event):
     reaction_name:str
     trigger_element:DMGType
     triggered_element:DMGType
+    dmg_list:List[damage]
     
 @dataclass
 class AddCard(Event):
@@ -207,4 +217,4 @@ class Discard(Event):
 class ChargeEnergy(Event):
     """energy_slots>0,充能. e_s<0,消耗充能(白垩)"""
     loc:Location
-    energy_slots:int#充能数
+    energy_slots:int#充能/扣能

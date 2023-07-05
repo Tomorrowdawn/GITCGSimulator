@@ -1,4 +1,4 @@
-import src.character as chr
+import src.character.chars as chr
 ###对这个模块执行反射函数即可.
 from src.character.character import Character
 

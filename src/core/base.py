@@ -22,6 +22,8 @@ class DiceInstance:
     
     def to_dict(self):
         return asdict(self)
+    def empty(self)->bool:
+        return self.omni | self.pyro | self.cryo | self.hydro | self.electro | self.dendro | self.anemo | self.geo
 
 @dataclass
 class DicePattern:
@@ -34,5 +36,6 @@ class DicePattern:
     geo:int = 0
     black:int = 0
     white:int = 0
+    omni:int = 0
     def to_dict(self):
         return asdict(self)
