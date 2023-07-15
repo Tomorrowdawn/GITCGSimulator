@@ -17,6 +17,7 @@ from abc import ABCMeta, abstractmethod
 from typing import List, Tuple, Mapping, Union, Any,TypedDict
 from enum import Enum
 import src.core.Event as Event
+import pickle
 
 class Character(metaclass = ABCMeta):
     class History(TypedDict):
@@ -37,6 +38,7 @@ class Character(metaclass = ABCMeta):
         
         frozen:bool
         petrified:bool
+        saturated:bool
         pass
     def __init__(self):
         self.loc:Location = None
@@ -47,13 +49,21 @@ class Character(metaclass = ABCMeta):
         self.artifact:Listener = None
         self.talent:Listener = None
         self.buff:List[Listener] = []
-        self.history:Character.History = {'frozen':False,'petrified':False}
+        self.history:Character.History = {'frozen':False,'petrified':False,'saturated':False}
         for name in ['na','skill','burst','sp1','sp2']:
             self.history[name+'_use_round'] = 0
             self.history[name+'_use_total'] = 0
         pass
+    def startphase_reset(self):
+        self.history['frozen'] = False
+        self.history['petrified'] = False
+        self.history['saturated'] = False
+        for name in ['na','skill','burst','sp1','sp2']:
+            self.history[name+'_use_round'] = 0
     def getListeners(self)->List[Listener]:
         """按序返回装备和角色状态"""
+        if self.hp <= 0:
+            return []
         ls = [self.weapon, self.artifact, self.talent]
         ls = [i for i in ls if i is not None]
         return ls + self.buff
@@ -65,11 +75,13 @@ class Character(metaclass = ABCMeta):
             else:
                 items.append(getattr(self, compo).export())
         buffs = [buff.export() for buff in self.buff]
-        items.append(buffs)
-        items.append(self.history)
+        items.append(buffs)###这里千万不能extend
+        items.append(pickle.loads(pickle.dumps(self.history)))
         return (type(self).__name__, items)
     def restore(self, profile:Profile):
         """profile顺序同CharIndexer
+        
+        外部调用后一定要用place分配location.
         """
         hp, energy, aura, weapon, artifact, talent, charbuff, history = profile
         

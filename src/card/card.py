@@ -38,17 +38,18 @@ class Deck:
     唯一的定向检索食品袋可以手写所有食品的集合然后取交集.
     """
     
-    def __init__(self, deck:Mapping[str,int] = None) -> None:
+    def __init__(self, deck:dict[str,int] = None) -> None:
         if deck is None:
-            self.pile = []
+            self.pile = {}
         else:
-            pass
+            self.pile = deck.copy()
         pass
-    def export(self)->List[str]:
-        pass
+    def export(self)->Mapping[str,int]:
+        return self.pile.copy()
     def __getitem__(self, index):
         return self.pile[index]
     def draw(self, num, tags = None)->List[str]:
+        ##为了适应蒙特卡洛, 这里得随机抽.
         pass
     def swapin(self, cards:List[str]):
         pass
@@ -60,7 +61,7 @@ class Hand(object):
     def __getitem__(self, index):
         return self.hand[index]
     def export(self):
-        return self.hand
+        return self.hand[:]
     def add(self, card:str):
         self.hand.append(card)
     def pick(self, index:int)->Card:

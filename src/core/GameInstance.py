@@ -5,11 +5,8 @@ sys.path.append("../..")
 from functools import singledispatchmethod
 from src.core.GameState import GameState, Profile, Item, PlayerState
 
-from dataclasses import dataclass, asdict
 from typing import Tuple, List, Any, Mapping, Union
-from copy import deepcopy
-from abc import ABCMeta, abstractmethod
-from src.core.base import DiceInstance, DicePattern, Location
+from src.core.base import DiceInstance, DicePattern, Location, get_oppoid
 from src.card.card import Card, Deck, Hand
 from src.character.character import Character
 from src.character.utils import name2char
@@ -19,13 +16,19 @@ from src.core.GameState import Aura, AuraList
 from src.core.EventManage import EventHub
 import src.core.Instruction as Ins
 import random
+import pickle
+
+def picklecopy(obj):
+    return pickle.loads(pickle.dumps(obj))
 
 dice_pattern_list = list(DicePattern().to_dict().keys())
 dice_ins_list = list(DiceInstance().to_dict().keys())
 
 class DicePool:
-    def __init__(self) -> None:
+    def __init__(self, dice = None) -> None:
         self.dice = DiceInstance()
+        if dice != None:
+            self.dice = dice
     def checkPattern(self, dice_pattern:DicePattern)->bool:
         """验证当前骰子是否支持该Pattern"""
         n = 0
@@ -69,24 +72,32 @@ class DicePool:
             else:
                 raise "Unknown dice type"
     def consume(self, dice_instance:DiceInstance):
+        if dice_instance is None:
+            return
         di = dice_instance.to_dict()
         n = 0
         for k , v in di.items():
             n += v
         self.dice.omni -= n
         if self.dice.omni < 0:
-            raise "Not Enough Dices"
+            raise Exception("Not Enough Dices")
         pass
     pass
 
+def loadchar(name, profile):
+    c = name2char(name)
+    c.restore(profile)
+    return c
 
 class PlayerInstance:
-    def __init___(self, g:PlayerState):
+    def __init__(self, g:PlayerState):
         player_id = g.history['player_id']
         self.deck = Deck(g.deck)
         self.hand = Hand(g.hand)
-        self.char:List[Character] = [name2char(char).restore(profile) for char, profile in g.char]
+        #print("chars = ",g.char)
+        self.char:List[Character] = [loadchar(char, profile) for char, profile in g.char]
         for i, c in enumerate(self.char):
+           # print("char = ",c)
             loc = Location(player_id, 'Char',i)
             c:Character
             c.place(loc)
@@ -95,22 +106,27 @@ class PlayerInstance:
         #self.teambuff
         #self.support
         #self.summon
-        ##TODO:
+        ##TODO: 别忘了place
         pass
-    def charView(self, active)->List[Character]:
+    def charView(self, active:int)->List[Character]:
+        """
+        active是index.
+        """
         views = []
         for c in self.char[active:]:
             views.append(c)
         views.extend(self.char[:active])
         return views
     def rmListener(self, loc:Location):
+        ##TODO:
         pass
     def getListeners(self)->List[Listener]:
         ls = list()
         active = self.history['active']
         char = self.charView(active)
         for c in char:
-            ls.extend(c.getListeners())
+            if c.hp > 0:
+                ls.extend(c.getListeners())
         ##TODO:还有其他区域的监听器.
         return ls
     def getAura(self)->List[Aura]:
@@ -121,6 +137,15 @@ class PlayerInstance:
             else:
                 auras.append(Aura.died)
         return auras
+    def setAura(self, new_aura):
+        for aura, c in zip(new_aura,self.char):
+            c.aura = aura
+    def getalives(self)->List[Location]:
+        locs = []
+        for c in self.char:
+            if c.hp > 0:
+                locs.append(c.loc)
+        return locs
     def get(self, loc:Location)->Union[Character, Listener]:
         area = loc.area
         if area != 'Char':
@@ -141,8 +166,22 @@ class PlayerInstance:
             else:
                 buff = char.buff
                 return buff[loc.offset]
+    def startphase_reset(self):
+        self.history['dieThisRound'] = False
+        self.history['endround'] = False
+        self.history['plunge'] = False
+        for c in self.char:
+            if not c.died():
+                c.startphase_reset()
     def export(self)->PlayerState:
-        pass
+        p = PlayerState()
+        p.deck = self.deck.export()
+        p.hand = self.hand.export()
+        p.char = [c.export() for c in self.char]
+        p.dice = picklecopy(self.dice)
+        p.history = picklecopy(self.history)
+        ##TODO:
+        return p
 class GameInstance:
     """提供方便的接口修改游戏状态, 执行事件,并可以导出GameState"""
     def __init__(self,g:GameState) -> None:
@@ -151,29 +190,41 @@ class GameInstance:
         ## 需要读成GameInstance的内部格式.
         self.maxid = 0
         self.thinking = False
-        self.dice1 = DiceInstance()
-        self.dice2 = DiceInstance()
         if g is None:
             return
-        """TODO:激活所有类"""
-        
         """
         包括Deck,Hand, 全部要读入对应类中.
         """
+       # print(g.players[0])
         self.p1 = PlayerInstance(g.players[0])
         self.p2 = PlayerInstance(g.players[1])
         self.history :GameState.History = g.history
     
-    def proceed(self, ins):
+    def proceed(self, ins, new_instance = False, callback = None):
+        """
+        new_instance:若为True, 则返回一个GameInstance的深拷贝. 
+        这个选项一般在AI搜索中开启, 正式对局中没有必要拷贝对局.
+        
+        callback:一个仅接收GameInstance参数的函数, 返回一个事件.
+        
+        callback的常用参考是history['phase']变量.
+        
+        roll:期待一个Roll事件
+        firstfive:期待一个ExchangeCard事件
+        deathswitch:期待一个Switch事件.
+        """
         eh = EventHub()
         ##TODO:
         events = self.translate(ins)
         for e in events:
-            eh.process(self, ins)
-    
-    def think(self, set1,set2):
+            eh.process(self, e, callback)
+        if new_instance:
+            return GameInstance(self.export())
+    def think(self, set1,set2, player_id):
         """
-        设置为thinking模式. 此模式下, Roll,DrawCard事件会失效. 
+        设置为thinking模式. 此模式下, 我方及对方的roll, 对方的drawcard事件会直接失效.
+        roll事件将会被替换为生成固定骰子. 对方的drawcard会失效. 我方的drawcard正常执行(配合外部的蒙特卡洛方法)
+        
         双方的手牌固定, 骰子固定.
         set:(hand, diceInstance). set1表示player1, set2表示player2
         hand需要你自己预测. 谨记, hand数量会影响打出&调和选择分支数量, 每一张卡都要仔细斟酌, 分支+1对于搜索的影响都是毁灭性的(而新增一张卡会导致分支+2).
@@ -192,6 +243,8 @@ class GameInstance:
         hand,dice = set2
         self.p2.dice.set(dice)
         self.p2.hand = Hand(hand)
+        
+        ###TODO: 修改为对Monte-Carlo方法的支持
         pass
     
     def rebuild(self)->None:
@@ -206,6 +259,9 @@ class GameInstance:
         """
         pass
     def getListeners(self, player_id)->List[Listener]:
+        """根据player_id返回监听器(所有监听器, 并非仅player)
+        player_id表明监听器顺序
+        """
         if player_id == 1:
             return self.p1.getListeners() + self.p2.getListeners()
         else:
@@ -215,16 +271,18 @@ class GameInstance:
             return self.p1.getAura()
         else:
             return self.p2.getAura()
+    def setAura(self, player_id, new_aura):
+        pds = self._getpds(player_id)
+        pds.setAura(new_aura)
     def export(self)->GameState:
         #return self.g.clone()
         ##需要将各个监听器的数据统一导出而非clone.
-        ##TODO:
         g = GameState()
         p1 = self.p1.export()
         p2 = self.p2.export()
         g.players.append(p1)
         g.players.append(p2)
-        g.history = deepcopy(self.history)
+        g.history = picklecopy(self.history)
         return g
     def get(self, loc:Location):
         if loc.player_id == 1:
@@ -247,10 +305,18 @@ class GameInstance:
         loc = Location(player_id, 'Char', active)
         
         return loc
+    def getOtherChar(self, loc:Location):
+        player_id = loc.player_id
+        pds = self._getpds(player_id)
+        locs = pds.getalives()
+        locs = [l for l in locs if l.index != loc.index]
+        return locs
     def getstandby(self, player_id)->List[Location]:
         pds = self._getpds(player_id)
-        ##TODO:
-        pass
+        locs = pds.getalives()
+        active = pds.history['active']
+        locs = [loc for loc in locs if loc.index != active]
+        return locs
     def make_damage(self, player_id, target:Union[Location,str], 
                     dvalue, dtype, source = 'active')->List[damage]:
         """
@@ -258,6 +324,8 @@ class GameInstance:
         (使用active或standby可能不足以定位)
         
         此接口返回一个damage列表. 通常情况下列表长1, 如果使用standby且后台两人存活,那么长2.
+        
+        此接口永远只返回reason=self的伤害.
         """
         
         #damage()
@@ -284,6 +352,11 @@ class GameInstance:
         active:Character
         t = active.skill_type[ins.kit]
         return UseKit(self.nexteid(), -1, ins.player_id, active_loc, ins.kit, t, ins.dice_instance)
+    @translate.register
+    def switch(self, ins:Ins.Switch):
+        active_loc = self.getactive(ins.player_id)
+        return Switch(self.nexteid(),-1,ins.player_id, active_loc, ins.direction, ins.dice_instance)
+    
     @property
     def mover(self):
         return self.history['mover']
@@ -296,13 +369,54 @@ class GameInstance:
     
     @singledispatchmethod
     def execute(self, event)->Union[List[Event],None]:
+        """
+        外部不要直接调用execute,而应该调用_execute(完善了各种条件检查)
+        """
+        
         ##这里使用分派.
-        pass
+        raise TypeError("Unknown type {} for event".format(type(event)))
+    
     
     @execute.register
     def dmgtypecheck(self, event:DMGTypeCheck):
-        ###这里检查是否会发生反应并发射反应事件（如果有）。
-        pass
+        ###可能分裂成DMG或者Reaction.
+        ###这里就会直接清理附着, 虽然和正常逻辑不太一样, 不过目前没有任何问题
+        player_id = event.player_id
+        events = []
+        dmg_list = []
+        for dmg in event.dmg_list:
+            before_aura = self.getAura(player_id)
+            after_aura, r = reaction(before_aura, dmg.target, dmg, player_id, event.eid, self)
+            if len(r) > 0:
+                events += r
+            else:
+                dmg_list.append(dmg)
+            self.setAura(after_aura)
+        if len(dmg_list) > 0:
+            events.append(DMG(self.nexteid(),event.eid,event.player_id,dmg_list))
+        return events
+    
+    @execute.register
+    def dmg(self, event:DMG):
+        ##TODO:转换成DealDMG
+        return [DealDMG(self.nexteid(), event.eid, event.player_id, event.dmg_list)]
+    
+    @execute.register
+    def reaction(self, event:Reaction):
+        ###TODO: 有副作用的反应先不实现(结晶, 草反应, 超载)
+        return [DealDMG(self.nexteid(), event.eid, event.player_id, event.dmg_list)]
+    
+    
+    @execute.register
+    def dealdmg(self, event:DealDMG):
+        ###调用injure等.
+        events = []
+        for dmg in event.final_dmg_list:
+            target = self.get(dmg.target)
+            target:Character
+            deaths = target.injure(dmg.dmgvalue)
+            events += deaths
+        return events
     
     @execute.register
     def usekit(self, event:UseKit):
@@ -314,7 +428,12 @@ class GameInstance:
         SM = SwapMove(self.nexteid(), event.eid, event.player_id, self.mover)
         kit = event.kit
         cast = active.__dict__[kit]##释放技能
+        active.history[kit+'_use_round'] += 1
+        active.history[kit+'_use_total'] += 1
         new_events = cast(self)
+        pds = self._getpds(event.player_id)
+        pds.dice.consume(event.dice_cost)
+        pds.history['plunge'] = False
         return new_events + [CE, SM]
     
     @execute.register
@@ -326,7 +445,246 @@ class GameInstance:
     
     @execute.register
     def swapmove(self, event:SwapMove):
-        if event.ifswap:
-            self.history['mover'] = 3 - self.history['mover']
+        oppo = self._getpds(event.player_id)
+        if not oppo.history['endround']:
+            if event.ifswap:
+                self.history['mover'] = 3 - self.history['mover']
+        return []
+    @execute.register
+    def death(self, event:Death):
+        death_player = event.player_id
+        pds = self._getpds(death_player)
+        if len(pds.getalives()) == 0:
+            self.history['winner'] = 3 - death_player
+            return []
+        else:
+            active_loc = self.getactive(death_player)
+            if active_loc.index == event.char_loc.index:
+                self.last_phase = self.history['phase']
+                self.history['phase'] = 'deathswitch'
+            return []
+    
+    @execute.register
+    def switch(self, event:Switch):
+        ##注意如果是deathswitch要转换至last_phase
+        ##注意只剩一个人时将是无效切人.
+        pds = self._getpds(event.player_id)
+        alives = pds.getalives()
+        if len(alives) <= 1:
+            return []
+        active = self.getactive()
+        chars = pds.charView(active.index)
+        increment = event.direct
+        i = increment
+        while chars[i].died():
+            i += increment
+        char = chars[i]
+        pds.history['active'] = char.loc.index
+        pds.history['plunge'] = True
+        pds.dice.consume(event.dice_cost)
+        event.succeed = True
+        return []
+
+    @execute.register
+    def over(self, event:Over):
+        if type(event.overed) == EndRound:
+            oppo_id = get_oppoid(event.player_id)
+            oppo = self._getpds(oppo_id)
+            if not oppo.history['endround']:
+                return [SwapMove(self.nexteid(), event.eid, event.player_id, event.player_id)]
+            else:
+                return [SwapMove(self.nexteid(), event.eid, event.player_id, event.player_id)] + \
+                    [EndPhase(self.nexteid(), event.eid, event.player_id)]
         return []
     
+    
+    @execute.register
+    def endround(self, event:EndRound):
+        pds = self._getpds(event.player_id)
+        pds.history['endround'] = True
+        return []
+    @execute.register
+    def endphase(self, event:EndPhase):
+        return [DrawCard(self.nexteid(),event.eid, event.player_id, 2)]
+    @execute.register
+    def startphase(self, event:StartPhase):
+        ###最重要的维护history的部分.
+        ###几乎所有history变量在这里都需要重置, 除了total_use.
+        
+        pass
+        
+    
+def swap_ele(e1,e2):
+    if e1 > e2:
+        return e2,e1
+    else:
+        return e1,e2
+    
+def apply_react(aura, application, loc:Location, dmg:damage, 
+                player_id, source_id, g:GameInstance)->Tuple[Aura,List[Reaction]]:
+    """火冰雷水的反应
+    
+    aura:附着元素(包括empty等)
+    application:施加元素(后手元素)
+    
+    返回新的aura和反应列表. 注意loc和Player_id往往不是同一方. loc是反应发生的精确位点
+    """
+    if aura == Aura.died:
+        return aura,[]
+    if aura == Aura.empty:
+        return application, []
+    t, a = swap_ele(aura, application)
+    ###按序排列好后, 之后的分支无需判断前面的元素.
+    ###也不需要判断geo和anemo(前面已处理过)
+    #print("t,a =", t, ', ', a)
+    re = 'NoReaction'
+    new_aura = aura
+    if t == Aura.pyro:
+        table = {
+            Aura.cryo:'melt',
+            Aura.electro:'overloaded',
+            Aura.hydro:'vaporize',
+            Aura.dendro:'burning',
+            Aura.crydendro:'melt',
+            #Aura.anemo:'swirl',
+            #Aura.geo:'crystallize'
+        }
+        re = table.get(a, 'NoReaction')
+        pass
+    elif t == Aura.cryo:
+        table = {
+            Aura.electro:'superconduct',
+            Aura.hydro:'frozen',
+            Aura.dendro:'NoReaction',
+            Aura.crydendro:'NoReaction',
+            #Aura.anemo:'swirl',
+            #Aura.geo:'crystallize'
+        }
+        re = table.get(a, 'NoReaction')
+        pass
+    elif t == Aura.electro:
+        table = {
+            Aura.hydro:'electrocharge',
+            Aura.dendro:'quicken',
+            Aura.crydendro:'superconduct',
+            #Aura.anemo:'swirl',
+            #Aura.geo:'crystallize'
+        }
+        re = table.get(a, 'NoReaction')
+        pass
+    elif t == Aura.hydro:
+        table = {
+            Aura.dendro:'bloom',
+            Aura.crydendro:'frozen',
+            #Aura.anemo:'swirl',
+            #Aura.geo:'crystallize'
+        }
+        re = table.get(a, 'NoReaction')
+        pass
+    elif t == Aura.dendro:
+        ###草不会与crydendro反应, 也不会与geo,anemo反应
+        return aura, []
+    elif t == Aura.crydendro:
+        return aura, []
+    else:
+        raise Exception("Unexpected Elemental Reaction with {} and {}".format(t,a))
+
+    ###这里需要处理好dmg.
+    plus_two = ['melt','overloaded','vaporize']
+    pierce = ['electrocharge','superconduct']
+    plus_one = ['burning','bloom','frozen','quicken']
+    
+    dmg_list = []
+    if dmg.dmgvalue > 0:##非伤害效应无视加伤效果
+        if re in plus_two:
+            dmg.dmgvalue += 2
+        elif re in plus_one:
+            dmg.dmgvalue += 1
+        elif re in pierce:
+            dmg.dmgvalue += 1
+            standbys = g.getOtherChar(loc)
+            for standby in standbys:
+                dmg_list.append(damage(dmg.attacker,standby, DMGType.pierce, 1))
+        elif re == 'NoReaction':
+            pass
+        else:
+            raise Exception('Unknown Reaction {}!'.format(re))
+    dmg_list = [dmg] + dmg_list
+    
+    if re != 'NoReaction':
+        r_event = Reaction(g.nexteid(),source_id, player_id, loc, re, 
+                           getattr(DMGType,aura.name), getattr(DMGType, application.name),dmg_list)
+        if new_aura == Aura.crydendro:
+            new_aura = Aura.dendro##一定与冰先反应
+        else:
+            new_aura = Aura.empty
+        return new_aura, [r_event]
+    else:
+        return new_aura, []
+
+def reaction(target_aura:List[Aura],  target_loc:Location,
+             dmg:damage,player_id, source_id, g:GameInstance)->Tuple[List[Aura], List[Union[Reaction,DMG]]]:
+    """
+    返回反应后的aura和反应事件或者伤害事件(反应事件可能有多个)
+    
+    注意, target_aura是一个aura列表, 装载了对方所有的角色的aura情况.
+    Reaction事件中已经完成基础的加伤事件. 
+    """
+    application = getattr(Aura, dmg.dmgtype.name)
+    application:Aura
+    dmg_list = [dmg]
+    target = target_loc.index
+    t_aura = target_aura[target]
+    if t_aura == Aura.empty:
+        if application in [Aura.anemo, Aura.geo]:
+            return target_aura, []
+        else:
+            target_aura[target] = application
+            return target_aura, []
+    elif t_aura == application:
+        return target_aura, []
+    elif t_aura == Aura.dendro and application == Aura.cryo or application == Aura.dendro and t_aura == Aura.cryo:
+        target_aura[target] = Aura.crydendro
+        return target_aura, []
+    elif t_aura == Aura.dendro and (application == Aura.anemo or application == Aura.geo):
+        return target_aura, []
+    elif application == Aura.geo:
+        if t_aura in (Aura.pyro, Aura.cryo, Aura.crydendro, Aura.hydro, Aura.electro):
+            if t_aura != Aura.crydendro:
+                target_aura[target] = Aura.empty
+            else:
+                target_aura[target] = Aura.dendro
+            auraName = t_aura.name
+            dmg_list[0].dmgvalue += 1##结晶增伤1
+            return target_aura, [Reaction(g.nexteid(),source_id,
+                                          player_id, target_loc,'crystallize', getattr(DMGType, auraName), DMGType.geo, dmg_list)]
+        pass
+    elif application == Aura.anemo:
+        if t_aura in (Aura.pyro, Aura.cryo, Aura.crydendro, Aura.hydro, Aura.electro):
+            if t_aura != Aura.crydendro:
+                target_aura[target] = Aura.empty
+            else:
+                target_aura[target] = Aura.dendro
+            r = [Reaction(g.nexteid(),source_id,
+                                        player_id, target_loc,'swirl', getattr(DMGType, t_aura.name), DMGType.anemo, dmg_list)]
+            ###然后计算后台反应. 如果有反应, 产生Reaction事件, 否则产生DMG事件.
+            ###小心深拷贝问题
+            others = g.getOtherChar(target_loc)
+            for other in others:
+                other_aura = target_aura[other.index]
+                swirl_damage = damage(dmg.attacker,other,getattr(DMGType, t_aura.name),1,'swirl')
+                after_aura, events = apply_react(other_aura, t_aura, other, swirl_damage, player_id, r[0].eid, g)
+                target_aura[other.index] = after_aura
+                if len(events) > 1:
+                    raise RuntimeError("Multiple Reactions while dealing with swirl!")
+                elif len(events) == 0:
+                    r.append(DMG(g.nexteid(), r[0].eid,player_id, [swirl_damage]))
+                else:
+                    r += events
+            return target_aura, r
+        pass
+    else:
+        t, r = apply_react(t_aura, application,target_loc,dmg,player_id, source_id, g)
+        target_aura[target] = t
+        return target_aura, r
+    return target_aura, []

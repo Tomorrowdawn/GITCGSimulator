@@ -19,6 +19,7 @@ def activate(gs:GameState)->GameState:
     name2char -> export
     """
     for i in [0,1]:
+        gs.players[i].history['player_id'] = i + 1
         chars = gs.players[i].char
         new_chars = []
         for char in chars:

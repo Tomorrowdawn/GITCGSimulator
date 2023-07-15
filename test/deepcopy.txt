@@ -1,0 +1,7 @@
+检查character, listener, gameinstance的export方法和restore方法(或者__init__)是否确保了深拷贝.
+
+即
+c = C()
+c' = C(c.export())
+do something to c'
+check if c is changed(all members need checking)

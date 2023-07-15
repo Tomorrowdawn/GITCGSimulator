@@ -39,3 +39,6 @@ class DicePattern:
     omni:int = 0
     def to_dict(self):
         return asdict(self)
+
+def get_oppoid(player_id):
+    return 3 - player_id

@@ -49,3 +49,16 @@ class Tuning(Instruction):
     card_offset:int
     dice_color:str##转换前的颜色.
     ##将转换前的颜色转换成出战角色颜色.
+    
+
+"""
+以下是非标准动作. 这些动作要么很少见(换牌), 要么涉及到随机(骰)
+"""
+
+@dataclass
+class Roll(Instruction):
+    rolled:DiceInstance##哪些骰子被重骰
+
+@dataclass
+class ExchangeCard(Instruction):
+    swapout:List[int]

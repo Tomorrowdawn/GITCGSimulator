@@ -12,11 +12,12 @@ class Event:
 @dataclass
 class Over(Event):
     ##它的source_id就是结束的事件.
+    overed:Event = None
     pass
     
 @dataclass
 class EndRound(Event):
-    pass
+    pass###注意维护history,比如plunge等.
     
 #ER = EndRound(1,2)
 @dataclass
@@ -25,6 +26,11 @@ class StartPhase(Event):
 
 @dataclass
 class EndPhase(Event):
+    pass###注意这里的player_id应该和下一轮的mover(先结束方)对应.
+
+@dataclass
+class RollPhase(Event):
+    ###rollcallback
     pass
 
 @dataclass
@@ -36,6 +42,8 @@ class Switch(Event):
     ##例如凯亚大招这种监听器, 在听到Switch时就要记录一下active_loc
     ##听到Over(Switch)时对比一下. 如果没变, 就说明切换失败了, 不能响应.
     ##主动切人和被动切人: 如果source_id = -1,就是主动. 否则就是被动.
+    succeed:bool = False
+    
 @dataclass
 class Death(Event):
     char_loc:Location##如果是前台死了,要触发deathswitch阶段.
@@ -59,6 +67,7 @@ class Roll(Event):
     enforce_dice:DiceInstance = DiceInstance()
     ##execute在汇总后用enforce_dice替换掉dice_instance中的部分.
     ##Roll也会修改mover, 但只是单纯因为无法做到同时掷骰而已, 不会触发SwapMove.
+    
     
 @dataclass
 class DicePreCal(Event):
@@ -100,7 +109,8 @@ class damage:
     target:Location
     dmgtype:DMGType
     dmgvalue:int
-    
+    reason:str = 'self'
+
 @dataclass
 class DMGTypeCheck(Event):
     dmg_list:List[damage]
@@ -142,22 +152,21 @@ class Reaction(Event):
     trigger_element:DMGType
     triggered_element:DMGType
     dmg_list:List[damage]
+    ###默认dmg_list是已经处理好增伤的列表(主要是因为扩散可能导致相当复杂的结算,需要当场算出来).
+    ###EventExecute需要处理的是副作用(激化领域, 结晶盾, etc)
     
 @dataclass
 class AddCard(Event):
-    player_id:int
     card_cls:Any
     ###目前应该只有刻晴雷楔.
 @dataclass
 class PlayCard(Event):
-    player_id:int
     offset:int##No. offset of hand
     targets:List[Location]
     dice_cost:DiceInstance = None
     
 @dataclass
 class Tuning(Event):
-    player_id:int
     card_offset:int
     dice_color:str##转换前的颜色
     ###该事件不会产生DiceInstance.直接被执行.
@@ -165,10 +174,14 @@ class Tuning(Event):
 
 @dataclass
 class DrawCard(Event):
-    player_id:int
     number:int
-    Cardfilter:Any##接收一张卡牌, 返回True or false. 只抽取特定的卡牌
+    Cardfilter:Any = None##接收一张卡牌, 返回True or false. 只抽取特定的卡牌
     #None表示无限制
+    
+@dataclass
+class ExchangeCard(Event):
+    indices:list##list[int],卡牌下标. 将这些卡牌放回去然后抽取等量卡牌.
+
 
 ##以下几个类的提醒: 如果有效应修改了原来的召唤物/状态, 则先摧毁后产生
 ##若没有修改, 则刷新. 所以execute里面应该是先查名字, 查到了再看具体类型.
@@ -178,12 +191,11 @@ class DrawCard(Event):
 ##XXX(loc, EM,game)
 @dataclass
 class Summon(Event):
-    player_id:int##which side's summon area
+   ##which side's summon area
     summoned:Any
 
 @dataclass
 class CreateBuff(Event):
-    player_id:int
     buff:Any
 
 @dataclass
@@ -193,7 +205,6 @@ class CreateCharBuff(Event):
 
 @dataclass
 class CreateSupport(Event):
-    player_id:int
     support:Any
 
 @dataclass
@@ -203,7 +214,6 @@ class Equip(Event):
 
 @dataclass
 class CreateHandListener(Event):
-    player_id:int
     handlistener:Any
     
 @dataclass

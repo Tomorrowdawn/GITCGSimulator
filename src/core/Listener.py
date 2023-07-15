@@ -20,10 +20,11 @@ MAX_LISTEN_VAR = 5
 
 
 class Listener(metaclass = ABCMeta):
-    _vars = []
+    _vars = ['usage']
     def __init__(self) -> None:
         self.alive = True
         self.loc:Location = None
+        self.usage = 0
         pass
     
     def record(self, name:str):
@@ -35,6 +36,11 @@ class Listener(metaclass = ABCMeta):
         之后调用export时会自动导出self.a. 装载时也会自动装载self.a
         
         注意必须传入字符串. 需在__init__中调用, 并且需要在最开头调用super().__init__().
+        usage是默认字段, 总是第一个. 只要可能,都要优先利用usage字段.
+        
+        注:
+        只有alive=True的监听器可能被导出.
+        loc需要外部调用place()手动赋值.
         """
         assert type(name) == str
         self._vars.append(name)
@@ -43,6 +49,8 @@ class Listener(metaclass = ABCMeta):
     def export(self)->Item:
         pass
     def restore(self, profile:Profile):
+        for name, value in zip(self._vars, profile):
+            setattr(self, name, value)
         pass
     def listen(self, g:"GameInstance", event)->Union[List[Event], None]:
         if self.alive and event.eid != -1:
