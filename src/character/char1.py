@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.core.GameInstance import GameInstance
     
-from src.core.Event import DMGType
+from src.core.Event import DMGType, damage
 import src.core.Event as Event
 from src.core.base import DicePattern
 
@@ -26,12 +26,17 @@ class Diluc(Character):
     no_charge = []
     
     def na(self,g:GameInstance):
-        dmg_list = g.make_damage('active',2,DMGType.physical)
+        dmg_list = g.make_damage(self.loc.player_id, 'active',2,DMGType.physical)
         return [Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list),]
     def skill(self,g:GameInstance):
-        pass
+        dmg_list = g.make_damage(self.loc.player_id, 'active',3,DMGType.pyro)
+        if self.history['skill_use_round'] == 3:
+            #dmg_list:list[damage]
+            dmg_list[0].dmgvalue += 2
+        return [Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list),]
     def burst(self,g:GameInstance):
-        pass
+        dmg_list = g.make_damage(self.loc.player_id, 'active',8,DMGType.pyro)
+        return [Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list),]
     def sp1(self,g):
         pass
     def sp2(self,g):

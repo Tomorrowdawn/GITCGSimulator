@@ -55,9 +55,9 @@ class SwapMove(Event):
     
 @dataclass
 class GenerateDice(Event):
-    dice_instance:DiceInstance
-    ###dice_instance该实例就是最终结果.
-    #例如卯师傅等随机骰子卡, 在外部确定后传过来即可.
+    dice_pattern:DicePattern
+    ###black表示杂骰(不含omni). 元素对应元素骰
+    ##white表示纯随机.
     
 @dataclass
 class Roll(Event):
@@ -188,7 +188,9 @@ class ExchangeCard(Event):
 
 #这里标记用Any纯粹是为了避免循环依赖. 应该是Listener.
 ##以下所有创建类事件的初始化都是一样的
-##XXX(loc, EM,game)
+##XXX()
+###XXX.place(loc) loc由外部计算得出.
+### 内部传递的都是类名. 因为事件不需要pickle,所以传类名也没关系.
 @dataclass
 class Summon(Event):
    ##which side's summon area

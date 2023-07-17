@@ -108,6 +108,7 @@ class PlayerState:
         pass
 
 from typing import TypedDict
+import pickle
 class GameState:
     class History(TypedDict):
         rounds:int
@@ -125,10 +126,10 @@ class GameState:
         else:
             self.players = []
     def clone(self):
-        g = GameState()
-        g.history = deepcopy(self.history)
-        g.players = [p.clone() for p in self.players]
-        return g
+        #g = GameState()
+        #g.history = deepcopy(self.history)
+        #g.players = [p.clone() for p in self.players]
+        return pickle.loads(pickle.dumps(self))
     def get(self, loc:Location)->Union[Profile, None]:
         pass
     def getChar(self, player_id)->List[Profile]:

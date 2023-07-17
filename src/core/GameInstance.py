@@ -14,6 +14,8 @@ from src.core.Event import *
 from src.core.Listener import Listener
 from src.core.GameState import Aura, AuraList
 from src.core.EventManage import EventHub
+from src.core.Listener import Summon,Buff
+
 import src.core.Instruction as Ins
 import random
 import pickle
@@ -29,13 +31,18 @@ class DicePool:
         self.dice = DiceInstance()
         if dice != None:
             self.dice = dice
+    def num(self)->int:
+        dn = 0
+        for k, v in self.dice.to_dict().items():
+            dn += v
+        return dn
     def checkPattern(self, dice_pattern:DicePattern)->bool:
         """验证当前骰子是否支持该Pattern"""
         n = 0
-        for k,v in dice_pattern.to_dict():
+        for k,v in dice_pattern.to_dict().items():
             n += v
         dn = 0
-        for k, v in self.dice.to_dict():
+        for k, v in self.dice.to_dict().items():
             dn += v
         if n > dn:
             return False
@@ -45,6 +52,9 @@ class DicePool:
         for die in dices:
             d[die] += 1
         self.dice = DiceInstance(**d)
+    def addDiceInstance(self, dice_instance:DiceInstance):
+        for k, v in dice_instance.to_dict().items():
+            self.dice[k] += v
     def set(self, di):
         self.dice = di
     def addDice(self, dice_pattern:DicePattern):
@@ -91,6 +101,8 @@ def loadchar(name, profile):
 
 class PlayerInstance:
     def __init__(self, g:PlayerState):
+        if g is None:
+            return
         player_id = g.history['player_id']
         self.deck = Deck(g.deck)
         self.hand = Hand(g.hand)
@@ -99,13 +111,12 @@ class PlayerInstance:
         for i, c in enumerate(self.char):
            # print("char = ",c)
             loc = Location(player_id, 'Char',i)
-            c:Character
             c.place(loc)
         self.dice = DicePool(g.dice)
         self.history = g.history
-        #self.teambuff
-        #self.support
-        #self.summon
+        self.teambuff = []
+        #self.support = []
+        self.summon:List[Summon] = []
         ##TODO: 别忘了place
         pass
     def charView(self, active:int)->List[Character]:
@@ -182,6 +193,15 @@ class PlayerInstance:
         p.history = picklecopy(self.history)
         ##TODO:
         return p
+    def clone(self):
+        p = PlayerInstance(None)
+        p.deck = picklecopy(self.deck)
+        p.hand = picklecopy(self.hand)
+        p.char = picklecopy(self.char)
+        p.dice = picklecopy(self.dice)
+        p.history = picklecopy(self.history)
+        ##TODO:
+        return p
 class GameInstance:
     """提供方便的接口修改游戏状态, 执行事件,并可以导出GameState"""
     def __init__(self,g:GameState) -> None:
@@ -189,7 +209,8 @@ class GameInstance:
         #不能直接存, 因为GameInstance是要修改状态的, 而GameState是只读的.
         ## 需要读成GameInstance的内部格式.
         self.maxid = 0
-        self.thinking = False
+        self.thinker = -1
+        self.estimator = None
         if g is None:
             return
         """
@@ -205,25 +226,36 @@ class GameInstance:
         new_instance:若为True, 则返回一个GameInstance的深拷贝. 
         这个选项一般在AI搜索中开启, 正式对局中没有必要拷贝对局.
         
-        callback:一个仅接收GameInstance参数的函数, 返回一个事件.
+        callback:接收GameInstance和event参数(注意顺序)的函数, 返回一个事件.
+        一般callback下分别有两个玩家自己的策略, 顶级函数根据event.player_id分发事件.
         
         callback的常用参考是history['phase']变量.
         
         roll:期待一个Roll事件
-        firstfive:期待一个ExchangeCard事件
+        firstfive:期待一个ExchangeCard事件.
         deathswitch:期待一个Switch事件.
         """
         eh = EventHub()
+        self.maxid = 0
         ##TODO:
         events = self.translate(ins)
         for e in events:
             eh.process(self, e, callback)
         if new_instance:
-            return GameInstance(self.export())
-    def think(self, set1,set2, player_id):
+            return self.clone()
+    def choose_active(self, player_id, active):
+        pds = self._getpds(player_id)
+        assert active >= 0 and active <= 2
+        pds.history['active'] = active
+    def _issue(self, event, callback):
+        eh = EventHub()
+        eh.process(self, event, callback)
+    def think(self,oppo_hand:list, player_id, estimator = None):
         """
         设置为thinking模式. 此模式下, 我方及对方的roll, 对方的drawcard事件会直接失效.
-        roll事件将会被替换为生成固定骰子. 对方的drawcard会失效. 我方的drawcard正常执行(配合外部的蒙特卡洛方法)
+        roll,generatedice等事件将会调用estimator回调函数. 对方的drawcard会失效. 我方的drawcard正常执行(配合外部的蒙特卡洛方法)
+        
+        estimator(event, g), 返回一个DiceInstance用于消除随机性.
         
         双方的手牌固定, 骰子固定.
         set:(hand, diceInstance). set1表示player1, set2表示player2
@@ -235,14 +267,9 @@ class GameInstance:
 
         dicePattern会替换双方的掷骰操作结果.
         """
-        self.thinking = True
-        hand, dice = set1
-        self.p1.dice.set(dice)
-        self.p1.hand = Hand(hand)
-        
-        hand,dice = set2
-        self.p2.dice.set(dice)
-        self.p2.hand = Hand(hand)
+        self.thinker = player_id
+        self.estimator = estimator
+        self.p2.hand = Hand(oppo_hand)
         
         ###TODO: 修改为对Monte-Carlo方法的支持
         pass
@@ -284,6 +311,12 @@ class GameInstance:
         g.players.append(p2)
         g.history = picklecopy(self.history)
         return g
+    def clone(self):
+        #g = GameInstance(None)
+        #g.p1 = self.p1.clone()
+        #g.p2 = self.p2.clone()
+        #g.history = picklecopy(self.history)
+        return picklecopy(self)
     def get(self, loc:Location):
         if loc.player_id == 1:
             pds = self.p1
@@ -351,11 +384,14 @@ class GameInstance:
         active = self.get(active_loc)
         active:Character
         t = active.skill_type[ins.kit]
-        return UseKit(self.nexteid(), -1, ins.player_id, active_loc, ins.kit, t, ins.dice_instance)
+        return [UseKit(self.nexteid(), -1, ins.player_id, active_loc, ins.kit, t, ins.dice_instance)]
     @translate.register
     def switch(self, ins:Ins.Switch):
         active_loc = self.getactive(ins.player_id)
-        return Switch(self.nexteid(),-1,ins.player_id, active_loc, ins.direction, ins.dice_instance)
+        return [Switch(self.nexteid(),-1,ins.player_id, active_loc, ins.direction, ins.dice_instance)]
+    @translate.register
+    def endround(self, ins:Ins.EndRound):
+        return [EndRound(self.nexteid(), -1 ,ins.player_id)]
     
     @property
     def mover(self):
@@ -365,6 +401,12 @@ class GameInstance:
         if event.eid == -1:
             return []
         else:
+            #typename = type(event).__name__.lower()
+            #if typename in ('dmg','dealdmg'):
+            #    return eval('self.'+typename)(event)
+            #print(event)
+            #print()
+            #else:
             return self.execute(event)
     
     @singledispatchmethod
@@ -390,8 +432,9 @@ class GameInstance:
             if len(r) > 0:
                 events += r
             else:
-                dmg_list.append(dmg)
-            self.setAura(after_aura)
+                if dmg.dmgvalue > 0:
+                    dmg_list.append(dmg)
+            self.setAura(dmg.target.player_id, after_aura)
         if len(dmg_list) > 0:
             events.append(DMG(self.nexteid(),event.eid,event.player_id,dmg_list))
         return events
@@ -412,10 +455,12 @@ class GameInstance:
         ###调用injure等.
         events = []
         for dmg in event.final_dmg_list:
-            target = self.get(dmg.target)
-            target:Character
-            deaths = target.injure(dmg.dmgvalue)
-            events += deaths
+            if dmg.dmgvalue > 0:
+                target = self.get(dmg.target)
+                target:Character
+                deaths = target.injure(dmg.dmgvalue, event.eid, self)
+                events += deaths
+                #print("deaths = ", deaths)
         return events
     
     @execute.register
@@ -427,7 +472,7 @@ class GameInstance:
             CE = ChargeEnergy(self.nexteid(), source, event.player_id, active_loc, 1)
         SM = SwapMove(self.nexteid(), event.eid, event.player_id, self.mover)
         kit = event.kit
-        cast = active.__dict__[kit]##释放技能
+        cast = getattr(active, kit)##释放技能
         active.history[kit+'_use_round'] += 1
         active.history[kit+'_use_total'] += 1
         new_events = cast(self)
@@ -483,18 +528,59 @@ class GameInstance:
         pds.history['plunge'] = True
         pds.dice.consume(event.dice_cost)
         event.succeed = True
+        if self.history['phase'] == 'deathswitch':
+            self.history['phase'] = self.last_phase
         return []
+    
+    def _search_listener(self, listener_type, summon_list):
+        index = -1
+        for i, s in enumerate(summon_list):
+            if isinstance(s, listener_type):
+                index = i
+                break
+        return index
+    
+    @execute.register
+    def summon(self, event:Summon):
+        pds = self._getpds(event.player_id)
+        index = self._search_listener(event.summoned, pds.summon)
+        if index == -1:
+            if len(pds.summon) >= 4:
+                ##召唤区已满
+                return []
+            s = event.summoned()
+            #s:Summon
+            loc = Location(event.player_id,'Summon',len(pds.summon))
+            s.place(loc)
+            pds.summon.append(s)
+        else:
+            pds.summon[index].update(event.summoned.init_usage)
+            
+        
 
     @execute.register
     def over(self, event:Over):
+        """
+        基本上成了状态机核心
+        """
         if type(event.overed) == EndRound:
             oppo_id = get_oppoid(event.player_id)
             oppo = self._getpds(oppo_id)
             if not oppo.history['endround']:
                 return [SwapMove(self.nexteid(), event.eid, event.player_id, event.player_id)]
             else:
+                self.history['phase'] = 'end'
                 return [SwapMove(self.nexteid(), event.eid, event.player_id, event.player_id)] + \
                     [EndPhase(self.nexteid(), event.eid, event.player_id)]
+        elif type(event.overed) == EndPhase:
+            self.history['phase'] = 'roll'
+            first = self.mover
+            ###TODO: V1全万能
+            return [GenerateDice(self.nexteid(), event.eid, first, DicePattern(omni = 8)),
+                GenerateDice(self.nexteid(), event.eid, 3 - first, DicePattern(omni = 8)), RollPhase(self.nexteid(), event.eid,event.player_id)]
+        elif type(event.overed) == RollPhase:
+            self.history['phase'] = 'start'
+            return [StartPhase(self.nexteid(), event.eid, event.player_id)]
         return []
     
     
@@ -505,14 +591,35 @@ class GameInstance:
         return []
     @execute.register
     def endphase(self, event:EndPhase):
-        return [DrawCard(self.nexteid(),event.eid, event.player_id, 2)]
-    @execute.register
-    def startphase(self, event:StartPhase):
         ###最重要的维护history的部分.
         ###几乎所有history变量在这里都需要重置, 除了total_use.
+        ##特别乐的是startphase要在endphase维护.
+        first = self.mover
+        pfirst = self._getpds(first)
+        psecond = self._getpds(3 - first)
+        pfirst.startphase_reset()
+        psecond.startphase_reset()
         
-        pass
-        
+        return [DrawCard(self.nexteid(),event.eid, event.player_id, 2)]
+    
+    @execute.register
+    def rollphase(self, event:RollPhase):
+        ###TODO: V1跳过重骰阶段. 
+        ## 注意rollphase需要两个人重骰.
+        return []
+    @execute.register
+    def startphase(self, event:StartPhase):
+        self.history['phase'] = 'combat'
+        return []
+    @execute.register
+    def generatedice(self, event:GenerateDice):
+        pds = self._getpds(event.player_id)
+        if self.estimator is not None:##V1全万能也不上
+            di = self.estimator(event, self)
+            pds.dice.addDiceInstance(di)
+        else:
+            pds.dice.addDice(event.dice_pattern)
+        return []
     
 def swap_ele(e1,e2):
     if e1 > e2:
@@ -630,7 +737,9 @@ def reaction(target_aura:List[Aura],  target_loc:Location,
     注意, target_aura是一个aura列表, 装载了对方所有的角色的aura情况.
     Reaction事件中已经完成基础的加伤事件. 
     """
-    application = getattr(Aura, dmg.dmgtype.name)
+    if dmg.dmgtype == DMGType.physical or dmg.dmgtype == DMGType.pierce:
+        return target_aura, []
+    application = Aura.__dict__[dmg.dmgtype.name]
     application:Aura
     dmg_list = [dmg]
     target = target_loc.index

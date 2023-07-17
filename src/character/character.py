@@ -20,6 +20,18 @@ import src.core.Event as Event
 import pickle
 
 class Character(metaclass = ABCMeta):
+    """
+    Character:
+    
+    __init__()如果需要重载此方法, 务必调用super().__init__()
+    
+    skill_type: Dict[str,str]. 注意, skill_type.keys()也指明了该角色的可用技能.
+    dict_cost:Dict[str,dice_pattern]. 需要与SKILL_TYPE保持一致
+    no_charge:list[str],指明哪些技能不产生充能(典型如宵宫E)
+    
+    maxhp, maxenergy, faction,weapontype, element等均与角色档案对应.
+    """
+    
     class History(TypedDict):
         na_use_round:int
         na_use_total:int

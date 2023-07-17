@@ -3,10 +3,12 @@ sys.path.append('..')
 from src.core.GameState import GameState,Box
 import numpy as np
 
+from src.core.base import DiceInstance,DicePattern, Location
 from src.core.GameInstance import GameInstance
 from src.character.utils import name2char
 from src.core.Instruction import Instruction
 import src.core.Instruction as Ins
+import src.core.Event as Event
 ###Instruction和Event有一点重名.
 from typing import Union, List, Tuple, Any,Dict
 
@@ -29,59 +31,69 @@ def activate(gs:GameState)->GameState:
     return gs
 
 from typing import TypedDict
+
+def fake_callback(*args):
+    return Event.Event(-1,-1,-1)
+
 class Game:
     def __init__(self):
-        self.gs = None
+        self.g = None
         pass
     def clone(self)->"Game":
         newgame = Game()
-        newgame.load(self.gs.clone())
+        newgame.load(self.g.clone())
         return newgame
-    def firstfive(self):
+    def firstfive(self,callback1, callback2):
         ####双方抽5
         ###player选择换牌(自己去hand看去)
         ###player同时选择出战角色
-        ###开始(设置mover,发送掷骰Event, 进入proceed流程).
+        ###开始(设置mover,发送一条Over(EndPhase), 进入proceed流程).
         pass
     def swaphand(self, player_id, indices:List[int]):
         pass
     def choose_active(self,player_id, active):
-        pass
+        self.g.choose_active(player_id, active)
     def initiate(self,gs:GameState):
-        self.gs = activate(gs.clone())
-    def load(self, gs:GameState):
-        self.gs = gs.clone()
-    def proceed(self, ins:Instruction)->"Game":
-        NewGame = Game()
-        GI = GameInstance(self.gs)
-        GI.proceed(ins)
-        gs = GI.export()
-        NewGame.load(gs)
-        return NewGame
+        self.g = GameInstance(activate(gs.clone()))
+        self.g.choose_active(1,0)
+        self.g.choose_active(2,0)
+        start = Event.EndPhase(0,-1,1)
+        self.g.history['mover'] = 1
+        self.g._issue(Event.Over(0,-1,1, start), fake_callback)
+        assert self.g.history['mover'] == 1
+    def load(self, g:GameInstance):
+        self.g = g
+    def proceed(self, ins:Instruction, new_game, callback):
+        if new_game:
+            g = self.clone()
+            g.g.proceed(ins, callback = callback)
+            return g
+        else:
+            self.g.proceed(ins, callback = callback)
     @property
     def mover(self):
-        return self.gs.history['mover']
-        pass
+        return self.g.history['mover']
     
     @property
     def phase(self):
-        return self.gs.history['phase']
-        pass
+        return self.g.history['phase']
     
     def state(self,player_id)->np.ndarray:
         pass
     
-    def gamestate(self)->GameState:
-        return self.gs
-    
     def valids(self,player_id)->np.ndarray:
         pass
     
-    def getIns(self, action:str)->Union[Instruction,None]:
+    def getIns(self, player_id, action:str)->Union[Instruction,None]:
         """使用该方法获得一个指令原型,或者None(如果这非法)
         
         指令原型中包含了该行动所需要支付的真实费用DicePattern.
-        你仍需要检查骰池以确定实际支付的骰子.
+        你仍需要检查骰池以确定实际支付的骰子. 
+        
+        一个标准的流程是:
+        ins = getIns(name)
+        ins.dice_instance = choose_dice(ins.dice_pattern, dicepool)
+        g = game.proceed(ins)
         
         action列表:
         na, skill, burst, sp1, sp2
@@ -97,10 +109,28 @@ class Game:
         valids返回的掩码对应上面的action列表. 需要提醒的是,最后两个行动每个都包含10个具体行动, 因此掩码会更长一些.
         """
         keys = action.split(' ')
-        if keys[0] == 'na':
-            pass
+        ###V1全部使用万能骰
+        g = self.g
+        dice = g._getpds(player_id).dice
+        if keys[0] in ('na','skill','burst','sp1','sp2'):
+            if dice.num() < 3:
+                return None
+            return Ins.UseKit(player_id,DicePattern(omni=3),DicePattern(omni=3),DiceInstance(omni=3),keys[0])
+        elif keys[0] == 'switch':
+            if dice.num() < 1:
+                return None
+            proto = Ins.Switch(player_id, DicePattern(omni=1),DicePattern(omni=1), DiceInstance(omni=1), 1)
+            if keys[1] == 'next':
+                proto.direction = 1
+            else:
+                proto.direction = -1
+            return proto
+        elif keys[0] == 'end':
+            return Ins.EndRound(player_id, None,None,None)
+        else:
+            raise NotImplementedError
+        return None
         
-        pass
 if __name__ == "__main__":
     b1 = Box(['Diluc','Kaeya'],[])
     b2 = Box(['Sucrose','Diluc'],[])

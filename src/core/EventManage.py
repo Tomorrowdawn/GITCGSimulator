@@ -25,19 +25,20 @@ class EventHub:
         这样可以避免监听器修改问题.
         """
         
-        if g.history['phase'] in ('deathswitch','roll','firstfive'):
-            if callback is not None:
-                e = callback(g)
-                self._handle(g, e, callback)
-            else:
-                raise CallBackError("no callback is provided however it's phase {}".format(g.history['phase']))
         if event.eid == -1:
             return 
+        #print("eventhub event = ", event)
         for listener in g.getListeners(event.player_id):
             ne = listener.listen(g, event)
             for e in ne:
                 self._handle(g, e, callback)
         ne = g._execute(event)##执行Over是有意义的.
+        if g.history['phase'] in ('deathswitch','roll','firstfive'):
+            if callback is not None:
+                e = callback(g, event)
+                self._handle(g, e, callback)
+            else:
+                raise CallBackError("no callback is provided however it's phase {}".format(g.history['phase']))
         for e in ne:
             self._handle(g, e, callback)
         if event.eid != -1 and type(event) is not Over:
