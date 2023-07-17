@@ -39,7 +39,7 @@ Simulator for GeniusInvokation TCG, tailor-made for ai training.
     - [ ] ExchangeCard回调(须弥共鸣)
 
 - [ ] Instruction交互系统, AI接口
-   - [ ] Instruction翻译成Event(Doing)
+   - [x] Instruction翻译成Event
    - [x] 可读出GameState格式的游戏状态 
    - [ ] Numpy格式的游戏状态(已定义, 未实现)
 
