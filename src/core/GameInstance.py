@@ -14,7 +14,7 @@ from src.core.Event import *
 from src.core.Listener import Listener
 from src.core.GameState import Aura, AuraList
 from src.core.EventManage import EventHub
-from src.core.Listener import Summon,Buff
+from src.core.Listener import Summoned,Buff
 
 import src.core.Instruction as Ins
 import random
@@ -116,7 +116,7 @@ class PlayerInstance:
         self.history = g.history
         self.teambuff = []
         #self.support = []
-        self.summon:List[Summon] = []
+        self.summon:List[Summoned] = []
         ##TODO: 别忘了place
         pass
     def charView(self, active:int)->List[Character]:
@@ -345,6 +345,9 @@ class GameInstance:
         locs = [l for l in locs if l.index != loc.index]
         return locs
     def getstandby(self, player_id)->List[Location]:
+        """
+        不要使用该方法编写群伤, 因为standby可能由于各种强制切人事件失效。使用OtherChar
+        """
         pds = self._getpds(player_id)
         locs = pds.getalives()
         active = pds.history['active']
@@ -388,7 +391,8 @@ class GameInstance:
     @translate.register
     def switch(self, ins:Ins.Switch):
         active_loc = self.getactive(ins.player_id)
-        return [Switch(self.nexteid(),-1,ins.player_id, active_loc, ins.direction, ins.dice_instance)]
+        return [Switch(self.nexteid(),-1,ins.player_id, active_loc, ins.direction, ins.dice_instance),
+                SwapMove(self.nexteid(),-1,ins.player_id, ins.player_id)]
     @translate.register
     def endround(self, ins:Ins.EndRound):
         return [EndRound(self.nexteid(), -1 ,ins.player_id)]
@@ -423,12 +427,11 @@ class GameInstance:
     def dmgtypecheck(self, event:DMGTypeCheck):
         ###可能分裂成DMG或者Reaction.
         ###这里就会直接清理附着, 虽然和正常逻辑不太一样, 不过目前没有任何问题
-        player_id = event.player_id
         events = []
         dmg_list = []
         for dmg in event.dmg_list:
-            before_aura = self.getAura(player_id)
-            after_aura, r = reaction(before_aura, dmg.target, dmg, player_id, event.eid, self)
+            before_aura = self.getAura(dmg.target.player_id)
+            after_aura, r = reaction(before_aura, dmg.target, dmg, event.player_id, event.eid, self)
             if len(r) > 0:
                 events += r
             else:
@@ -490,10 +493,10 @@ class GameInstance:
     
     @execute.register
     def swapmove(self, event:SwapMove):
-        oppo = self._getpds(event.player_id)
+        oppo = self._getpds(3 - event.now_mover)
         if not oppo.history['endround']:
             if event.ifswap:
-                self.history['mover'] = 3 - self.history['mover']
+                self.history['mover'] = 3 - event.now_mover
         return []
     @execute.register
     def death(self, event:Death):
@@ -513,11 +516,19 @@ class GameInstance:
     def switch(self, event:Switch):
         ##注意如果是deathswitch要转换至last_phase
         ##注意只剩一个人时将是无效切人.
-        pds = self._getpds(event.player_id)
+        ##Reminder: 注意这里全看char_loc!!!
+        loc = event.char_loc
+        pds = self._getpds(loc.player_id)
+        if self.history['phase'] == 'deathswitch':
+            self.history['phase'] = self.last_phase
+            pds.history['active'] = (loc.index + event.direct) % 3
+            pds.history['plunge'] = True
+            event.succeed = True
+            return []
         alives = pds.getalives()
         if len(alives) <= 1:
             return []
-        active = self.getactive()
+        active = self.getactive(loc.player_id)
         chars = pds.charView(active.index)
         increment = event.direct
         i = increment
@@ -528,8 +539,6 @@ class GameInstance:
         pds.history['plunge'] = True
         pds.dice.consume(event.dice_cost)
         event.succeed = True
-        if self.history['phase'] == 'deathswitch':
-            self.history['phase'] = self.last_phase
         return []
     
     def _search_listener(self, listener_type, summon_list):
@@ -555,7 +564,8 @@ class GameInstance:
             pds.summon.append(s)
         else:
             pds.summon[index].update(event.summoned.init_usage)
-            
+        return []
+    
         
 
     @execute.register
@@ -570,6 +580,8 @@ class GameInstance:
                 return [SwapMove(self.nexteid(), event.eid, event.player_id, event.player_id)]
             else:
                 self.history['phase'] = 'end'
+                self.p1.history['endround'] = False
+                self.p2.history['endround'] = False
                 return [SwapMove(self.nexteid(), event.eid, event.player_id, event.player_id)] + \
                     [EndPhase(self.nexteid(), event.eid, event.player_id)]
         elif type(event.overed) == EndPhase:
@@ -599,7 +611,8 @@ class GameInstance:
         psecond = self._getpds(3 - first)
         pfirst.startphase_reset()
         psecond.startphase_reset()
-        
+        self.p1.dice.dice = DiceInstance()
+        self.p2.dice.dice = DiceInstance()
         return [DrawCard(self.nexteid(),event.eid, event.player_id, 2)]
     
     @execute.register
@@ -619,6 +632,10 @@ class GameInstance:
             pds.dice.addDiceInstance(di)
         else:
             pds.dice.addDice(event.dice_pattern)
+        return []
+    
+    @execute.register
+    def drawcard(self, event:DrawCard):
         return []
     
 def swap_ele(e1,e2):
@@ -777,6 +794,7 @@ def reaction(target_aura:List[Aura],  target_loc:Location,
             r = [Reaction(g.nexteid(),source_id,
                                         player_id, target_loc,'swirl', getattr(DMGType, t_aura.name), DMGType.anemo, dmg_list)]
             ###然后计算后台反应. 如果有反应, 产生Reaction事件, 否则产生DMG事件.
+            ###注意要用OtherChar， 因为砂糖之类的强制切人先切人后伤害（否则伤害打死人了很难办）
             ###小心深拷贝问题
             others = g.getOtherChar(target_loc)
             for other in others:

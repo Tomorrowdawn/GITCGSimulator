@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 from src.core.Event import DMGType, damage
 import src.core.Event as Event
 from src.core.base import DicePattern
+from src.core.Listener import Buff, Summoned
 
 class Diluc(Character):
     maxhp = 10
@@ -42,13 +43,43 @@ class Diluc(Character):
     def sp2(self,g):
         pass
 
+
+class LargeWindSpirit(Summoned):
+    init_usage = 3
+    dtype = DMGType.anemo
+    dvalue = 2
+    pass
+
 class Sucrose(Character):
+    maxhp = 10
+    maxenergy = 3
+    faction = 'Mondstadt'
+    weapontype = 'Catalyst'
+    element = 'anemo'
+    
+    dice_cost = {
+        'na':DicePattern(anemo=1,black=2),
+        'skill':DicePattern(anemo=3),
+        'busrt':DicePattern(anemo=3),
+    }
+    no_charge = []
     def na(self,g):
+        dmg_list = g.make_damage(self.loc.player_id, 'active',1,DMGType.anemo)
+        return [Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list),]
         pass
-    def skill(self,g):
-        pass
+    def skill(self,g:GameInstance):
+        dmg_list = g.make_damage(self.loc.player_id, 'active',3,DMGType.anemo)
+        pid = self.loc.player_id
+        dmg =  Event.RawDMG(g.nexteid(),-1,pid,dmg_list)
+        oppo = g.getactive(3 - pid)
+        switch = Event.Switch(g.nexteid(), -1, pid, oppo, -1)
+        return [switch, dmg]
     def burst(self,g):
-        pass
+        dmg_list = g.make_damage(self.loc.player_id, 'active',1,DMGType.anemo)
+        pid = self.loc.player_id
+        dmg =  Event.RawDMG(g.nexteid(),-1,pid,dmg_list)
+        summon = Event.Summon(g.nexteid(), -1 ,pid, LargeWindSpirit)
+        return [dmg, summon]
     def sp1(self,g):
         pass
     def sp2(self,g):

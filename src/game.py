@@ -70,6 +70,10 @@ class Game:
             return g
         else:
             self.g.proceed(ins, callback = callback)
+    def terminated(self):
+        if self.g.history['winner'] > 0:
+            return True
+        return False
     @property
     def mover(self):
         return self.g.history['mover']
@@ -113,16 +117,26 @@ class Game:
         g = self.g
         dice = g._getpds(player_id).dice
         if keys[0] in ('na','skill','burst','sp1','sp2'):
+            active = g.getactive(player_id)
+            c = g.get(active)
             if dice.num() < 3:
+                return None
+            if keys[0] == 'burst' and c.energy < c.maxenergy:
                 return None
             return Ins.UseKit(player_id,DicePattern(omni=3),DicePattern(omni=3),DiceInstance(omni=3),keys[0])
         elif keys[0] == 'switch':
             if dice.num() < 1:
                 return None
+            pds = g._getpds(player_id)
+            others = pds.getalives()
+            if len(others) <= 1:
+                return None
             proto = Ins.Switch(player_id, DicePattern(omni=1),DicePattern(omni=1), DiceInstance(omni=1), 1)
             if keys[1] == 'next':
                 proto.direction = 1
             else:
+                if len(others) == 1:
+                    return None
                 proto.direction = -1
             return proto
         elif keys[0] == 'end':

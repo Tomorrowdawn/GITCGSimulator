@@ -85,11 +85,11 @@ class Listener(metaclass = ABCMeta):
     
     
     
-class Summon(Listener):
+class Summoned(Listener):
     """
-    Summon是一类特殊的Listener, 它们仅有usage变量会被储存, 无法使用record方法.
+    Summoned是一类特殊的Listener, 它们仅有usage变量会被储存, 无法使用record方法.
     
-    Summon提供一个update方法, 传递一个usage变量, 该变量通常是init_usage, 即发生重名时外部传入的可用次数.
+    Summoned提供一个update方法, 传递一个usage变量, 该变量通常是init_usage, 即发生重名时外部传入的可用次数.
     对于某些Summon来说, 这里需要定义叠加规则. 对于大多数Summon而言, 这里取两者之高.
     
     注意, 快快缝补术不会调用update而是直接操控usage.
