@@ -52,13 +52,13 @@ class Listener(metaclass = ABCMeta):
         self._vars.append(name)
         if len(self._vars) > MAX_LISTEN_VAR:
             raise "Too many variables! Try to remove constant like damage per hit or remove variables those only works in runtime."
-    def __getstate__(self):
-        state = {
-            'alive':True, 'loc':self.loc
-        }
-        for var in self._vars:
-            state[var] = self.__dict__[var]
-        return state
+    #def __getstate__(self):
+    #    state = {
+    #        'alive':True, 'loc':self.loc
+    #    }
+    #    for var in self._vars:
+    #        state[var] = self.__dict__[var]
+    #    return state
     def export(self)->Item:
         pass
     def restore(self, profile:Profile):
@@ -137,8 +137,11 @@ class Buff(Listener):
     usage:同Listener
     is_shield: 是否是一个护盾状态
     """
-    
+    init_usage = 0
     is_shield = False
+    def __init__(self) -> None:
+        super().__init__()
+        self.usage = self.init_usage
     pass
     
 class Weapon(Listener):

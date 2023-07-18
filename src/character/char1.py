@@ -1,13 +1,14 @@
 from __future__ import annotations
 import sys
+
 sys.path.extend(['..','../..'])
 
 from src.character.character import Character
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 if TYPE_CHECKING:
     from src.core.GameInstance import GameInstance
     
-from src.core.Event import DMGType, damage
+from src.core.Event import DMGType, Event, List, damage
 import src.core.Event as Event
 from src.core.base import DicePattern
 from src.core.Listener import Buff, Summoned
@@ -86,14 +87,57 @@ class Sucrose(Character):
         pass
     pass
 
+class GlacialWaltz(Buff):
+    init_usage = 3
+    def __init__(self):
+        self.switch_id = -2
+        #self.record('switch_id')
+        super().__init__()
+    def take_listen(self, g: GameInstance, event: Event) -> List[Event]:
+        if type(event) is Event.Switch:
+            self.switch_id = event.eid
+            return []
+        elif type(event) == Event.Over:
+            #print(self.__dict__)
+            if event.overed.eid == self.switch_id:
+                es = []
+                if event.overed.succeed:
+                    oppo_active = g.getactive(3-self.loc.player_id)
+                    dmg = damage(self.loc, oppo_active, DMGType.cryo, 2)
+                    es.append(Event.DMG(g.nexteid(),event.eid,self.loc.player_id,[dmg]))
+                    self.usage -= 1
+                self.switch_id = -2
+                return es
+            else:
+                return []
+        else:
+            return []
+
 class Kaeya(Character):
     maxhp = 10
-    def na(self,g):
-        pass
-    def skill(self,g):
-        pass
-    def burst(self,g):
-        pass
+    maxenergy = 2
+    faction = 'Mondstadt'
+    weapontype = 'Sword'
+    element = 'cryo'
+    
+    dice_cost = {
+        'na':DicePattern(cryo=1,black=2),
+        'skill':DicePattern(cryo=3),
+        'busrt':DicePattern(cryo=4),
+    }
+    no_charge = []
+    
+    def na(self,g:GameInstance):
+        dmg_list = g.make_damage(self.loc.player_id, 'active',2,DMGType.physical)
+        return [Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list),]
+    def skill(self,g:GameInstance):
+        dmg_list = g.make_damage(self.loc.player_id, 'active',3,DMGType.cryo)
+        return [Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list),]
+    def burst(self,g:GameInstance):
+        dmg_list = g.make_damage(self.loc.player_id, 'active',1,DMGType.cryo)
+        dmg = Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list)
+        buff = Event.CreateBuff(g.nexteid(),-1,self.loc.player_id, GlacialWaltz)
+        return [dmg, buff]
     def sp1(self,g):
         pass
     def sp2(self,g):

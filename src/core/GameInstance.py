@@ -114,7 +114,7 @@ class PlayerInstance:
             c.place(loc)
         self.dice = DicePool(g.dice)
         self.history = g.history
-        self.teambuff = []
+        self.buff = []
         #self.support = []
         self.summon:List[Summoned] = []
         ##TODO: 别忘了place
@@ -128,9 +128,39 @@ class PlayerInstance:
             views.append(c)
         views.extend(self.char[:active])
         return views
+    
+    def places(self, listener_list, re_index = True):
+        """
+        re_index = True, 则修改index域。 否则修改offset
+        """
+        for i, l in enumerate(listener_list):
+            l:Listener
+            if re_index:
+                l.loc.index = i
+            else:
+                l.loc.offset = i
+    
     def rmListener(self, loc:Location):
-        ##TODO:
-        pass
+        area = loc.area
+        area = area.lower()
+        Area = self.__dict__[area]
+        if area != 'Char':
+            Area:list
+            Area.pop(loc.index)
+            self.places(Area)
+        else:
+            char = Area[loc.index]
+            if loc.subarea == '':
+                return char
+            elif loc.subarea == 'talent':
+                return char.talent
+            elif loc.subarea == 'weapon':
+                return char.weapon
+            elif loc.subarea == 'artifact':
+                return char.artifact
+            else:
+                char.buff.pop(loc.offset)
+                self.places(char.buff,re_index=False)
     def getListeners(self)->List[Listener]:
         ls = list()
         active = self.history['active']
@@ -138,6 +168,10 @@ class PlayerInstance:
         for c in char:
             if c.hp > 0:
                 ls.extend(c.getListeners())
+        for s in self.summon:
+            ls.append(s)
+        for b in self.buff:
+            ls.append(b)
         ##TODO:还有其他区域的监听器.
         return ls
     def getAura(self)->List[Aura]:
@@ -472,7 +506,10 @@ class GameInstance:
         active_loc = event.cur_char
         source = event.eid
         if event.kit not in active.no_charge:
-            CE = ChargeEnergy(self.nexteid(), source, event.player_id, active_loc, 1)
+            if event.kit != 'burst':
+                CE = ChargeEnergy(self.nexteid(), source, event.player_id, active_loc, 1)
+            else:
+                CE = ChargeEnergy(self.nexteid(), source, event.player_id, active_loc, -active.maxenergy)
         SM = SwapMove(self.nexteid(), event.eid, event.player_id, self.mover)
         kit = event.kit
         cast = getattr(active, kit)##释放技能
@@ -521,7 +558,10 @@ class GameInstance:
         pds = self._getpds(loc.player_id)
         if self.history['phase'] == 'deathswitch':
             self.history['phase'] = self.last_phase
-            pds.history['active'] = (loc.index + event.direct) % 3
+            index = (loc.index + event.direct) % 3
+            if pds.char[index].died():##最多三个人, 所以判断一次就够了.
+                index = (index + event.direct) % 3
+            pds.history['active'] = index
             pds.history['plunge'] = True
             event.succeed = True
             return []
@@ -550,6 +590,13 @@ class GameInstance:
         return index
     
     @execute.register
+    def discard(self, event:Discard):
+        loc = event.discard_loc
+        pds = self._getpds(loc.player_id)
+        pds.rmListener(loc)
+        return []
+    
+    @execute.register
     def summon(self, event:Summon):
         pds = self._getpds(event.player_id)
         index = self._search_listener(event.summoned, pds.summon)
@@ -565,7 +612,18 @@ class GameInstance:
         else:
             pds.summon[index].update(event.summoned.init_usage)
         return []
-    
+    @execute.register
+    def createbuff(self, event:CreateBuff):
+        pds = self._getpds(event.player_id)
+        index = self._search_listener(event.buff, pds.buff)
+        if index == -1:
+            b = event.buff()
+            loc = Location(event.player_id,'Buff',len(pds.buff))
+            b.place(loc)
+            pds.buff.append(b)
+        else:
+            pds.buff[index].usage = event.buff.init_usage
+        return []
         
 
     @execute.register

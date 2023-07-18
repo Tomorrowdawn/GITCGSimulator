@@ -15,8 +15,10 @@ class Searcher:
         hp_scores = 0
         aura_scores = 0
         summon_scores = 0
-        #dice_scores = p.dice.num() * 0.7
-        dice_scores = 0
+        if not p.history['endround']:
+            dice_scores = p.dice.num()
+        else:
+            dice_scores = 0
         for c in p.char:
             hp_scores += c.hp
             if c.aura != Aura.empty or c.aura != Aura.died:
