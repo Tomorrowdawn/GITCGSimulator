@@ -15,17 +15,19 @@ class Searcher:
         hp_scores = 0
         aura_scores = 0
         summon_scores = 0
+        energy_scores = 0
         if not p.history['endround']:
             dice_scores = p.dice.num()
         else:
             dice_scores = 0
         for c in p.char:
             hp_scores += c.hp
+            energy_scores += c.energy
             if c.aura != Aura.empty or c.aura != Aura.died:
                 aura_scores += -1
         for s in p.summon:
-            summon_scores += s.dvalue * 0.8
-        return hp_scores + aura_scores + summon_scores + dice_scores
+            summon_scores += s.dvalue * s.usage * 0.7
+        return hp_scores + aura_scores + summon_scores + dice_scores + energy_scores
     def val(self, g:Game):
         if g.terminated():
             if g.g.history['winner'] == g.g.history['mover']:

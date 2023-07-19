@@ -53,7 +53,7 @@ class LargeWindSpirit(Summoned):
 
 class Sucrose(Character):
     maxhp = 10
-    maxenergy = 3
+    maxenergy = 2
     faction = 'Mondstadt'
     weapontype = 'Catalyst'
     element = 'anemo'
@@ -67,7 +67,6 @@ class Sucrose(Character):
     def na(self,g):
         dmg_list = g.make_damage(self.loc.player_id, 'active',1,DMGType.anemo)
         return [Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list),]
-        pass
     def skill(self,g:GameInstance):
         dmg_list = g.make_damage(self.loc.player_id, 'active',3,DMGType.anemo)
         pid = self.loc.player_id
@@ -94,7 +93,7 @@ class GlacialWaltz(Buff):
         #self.record('switch_id')
         super().__init__()
     def take_listen(self, g: GameInstance, event: Event) -> List[Event]:
-        if type(event) is Event.Switch:
+        if type(event) is Event.Switch and event.char_loc.player_id == self.loc.player_id:
             self.switch_id = event.eid
             return []
         elif type(event) == Event.Over:
@@ -104,7 +103,7 @@ class GlacialWaltz(Buff):
                 if event.overed.succeed:
                     oppo_active = g.getactive(3-self.loc.player_id)
                     dmg = damage(self.loc, oppo_active, DMGType.cryo, 2)
-                    es.append(Event.DMG(g.nexteid(),event.eid,self.loc.player_id,[dmg]))
+                    es.append(Event.RawDMG(g.nexteid(),event.eid,self.loc.player_id,[dmg]))
                     self.usage -= 1
                 self.switch_id = -2
                 return es

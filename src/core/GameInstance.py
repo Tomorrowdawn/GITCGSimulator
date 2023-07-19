@@ -702,6 +702,7 @@ def swap_ele(e1,e2):
     else:
         return e1,e2
     
+    
 def apply_react(aura, application, loc:Location, dmg:damage, 
                 player_id, source_id, g:GameInstance)->Tuple[Aura,List[Reaction]]:
     """火冰雷水的反应

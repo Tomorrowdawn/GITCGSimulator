@@ -122,7 +122,7 @@ class Summoned(Listener):
             return []
         oppo = g.getactive(3 - event.player_id)
         dmg = damage(self.loc,oppo, self.dtype, self.dvalue)
-        d = DMG(g.nexteid(), event.eid, event.player_id, [dmg])
+        d = RawDMG(g.nexteid(), event.eid, event.player_id, [dmg])
         self.usage -= 1
         if self.usage <= 0:
             self.alive = False
