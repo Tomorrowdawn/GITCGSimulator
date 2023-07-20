@@ -145,7 +145,7 @@ class Game:
             if keys[1] == 'next':
                 proto.direction = 1
             else:
-                if len(others) == 1:
+                if len(others) == 2:
                     return None
                 proto.direction = -1
             return proto

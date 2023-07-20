@@ -85,7 +85,7 @@ class Sucrose(Character):
         pid = self.loc.player_id
         dmg =  Event.RawDMG(g.nexteid(),-1,pid,dmg_list)
         summon = Event.Summon(g.nexteid(), -1 ,pid, LargeWindSpirit)
-        return [dmg, summon]
+        return [summon, dmg]
     def sp1(self,g):
         pass
     def sp2(self,g):

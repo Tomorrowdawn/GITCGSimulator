@@ -3,7 +3,7 @@ from __future__ import annotations
 本代码实现事件处理框架以及事件执行(分派)函数.
 """
 
-from src.core.Event import Event, Over
+from src.core.Event import Event, Over, Death
 from src.core.Listener import Listener
 from src.core.GameState import GameState
 from src.core.error import CallBackError
@@ -38,7 +38,9 @@ class EventHub:
             queue.extend(ne)
         ne = g._execute(event)
         queue.extend(ne)
-        if g.history['phase'] in ('deathswitch','roll','firstfive'):
+        if g.history['phase'] in ('deathswitch','roll','firstfive') and (
+            isinstance(event, Death) 
+        ):
             if callback is not None:
                 if type(event) is not Over:
                     q = [Over(g.nexteid(),event.eid, event.player_id, event)] + self.q
@@ -51,7 +53,6 @@ class EventHub:
         if type(event) is not Over:
             queue.append(Over(g.nexteid(),event.eid, event.player_id, event))
         return queue
-            
                     
         
 # class EventHub:

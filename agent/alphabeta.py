@@ -5,6 +5,7 @@ from src.core.GameInstance import GameInstance,PlayerInstance,Aura
 from src.core.Event import *
 import time
 from src.character.char1 import GlacialWaltz
+from src.core.EventManage import EventHub
 
 class Searcher:
     WIN_SCORE = 1000
@@ -12,6 +13,10 @@ class Searcher:
         self.nodes = 0
         self.start_time = 0
         self.player_id = player
+        self.remain_depth = 0
+        self.searching = False
+        #self.pv_line = []
+        self.time_limit = 5
     def _scores(self, p:PlayerInstance):
         hp_scores = 0
         aura_scores = 0
@@ -20,20 +25,20 @@ class Searcher:
         dice_scores = 0
         buff_scores = 0
         if not p.history['endround']:
-            dice_scores = p.dice.num() // 3 * 2
+            dice_scores = p.dice.num() * 2
         else:
             dice_scores = 0
         for c in p.char:
             if c.hp > 0:
                 hp_scores += c.hp
-                energy_scores += c.energy * 0.4
+                energy_scores += c.energy
                 if c.aura != Aura.empty:
                     aura_scores += -1
         for b in p.buff:
-            if isinstance(b, GlacialWaltz):
+            if isinstance(b, GlacialWaltz) and len(p.getalives()) > 1:
                 buff_scores += b.usage * 2 * 0.7
         for s in p.summon:
-            summon_scores += s.dvalue * s.usage * 0.5
+            summon_scores += s.dvalue * 0.7 + s.dvalue * (s.usage - 1) * 0.1
         return hp_scores + aura_scores + summon_scores + buff_scores + dice_scores + energy_scores
     def val(self, g:Game):
         if g.terminated():
@@ -49,10 +54,29 @@ class Searcher:
     def callback(self, g:GameInstance,event, event_set, event_queue):
         if isinstance(event, Death) and g.history['phase'] == 'deathswitch':
             active = g.getactive(event.player_id)
-            return Switch(g.nexteid(), event.eid, event.player_id, active, 1)
+            #temp = g.clone()
+            best = -10000
+            best_s = None
+            for direct in (1,-1):
+                s = Switch(g.nexteid(), event.eid, event.player_id, active, direct)
+                game = Game()
+                game.g = g.clone()
+                eh = EventHub(event_set + [s] + event_queue)
+                eh.checkout(game.g, self.callback)
+                if self.searching:
+                    val = self._alphabeta(game, -Searcher.WIN_SCORE, Searcher.WIN_SCORE, self.remain_depth)
+                else:
+                    val = self._alphabeta(game, -Searcher.WIN_SCORE, Searcher.WIN_SCORE, 7)
+                if event.player_id != game.mover:
+                    val = -val
+                if val > best:
+                    best = val
+                    best_s = s
+            return best_s
         else:
             return Event(-1,-1,-1)
     def _alphabeta(self, g:Game , alpha, beta, depth):
+        self.remain_depth = depth - 1
         self.nodes += 1
         if time.time() - self.start_time > self.time_limit:
             return self.val(g)
@@ -63,7 +87,7 @@ class Searcher:
        # if depth <= 2 and self.val(g) + 5 < alpha:
         #    depth -= 1
         def moves():
-            for move in ['skill','na','switch next','switch previous','burst','end round']:
+            for move in ['burst', 'skill','na','switch next','switch previous','end round']:
                 ins = g.getIns(g.mover, move)
                 if ins is not None:
                     yield ins
@@ -76,13 +100,16 @@ class Searcher:
             #print("move = ",move)
             #print("val = ",val)
             if val >= beta:
+                #self.fail_soft[self.remain_depth] += 1
                 return beta
             if val > alpha:
                 alpha = val
         return alpha
     def _search(self,g,depth):
+        self.nodes += 1
+        self.remain_depth = depth - 1
         def moves():
-            for move in ['skill','na','switch next','switch previous','burst','end round']:
+            for move in ['burst', 'skill','na','switch next','switch previous','end round']:
                 ins = g.getIns(g.mover, move)
                 if ins is not None:
                     yield ins
@@ -101,6 +128,7 @@ class Searcher:
             if val > alpha:
                 alpha = val
             if val >= beta:
+                #self.fail_soft[self.remain_depth] += 1
                 return actions, scores
         return actions, scores
     def search(self, time_limit, g:Game, debug = False, **kwargs):
@@ -109,14 +137,21 @@ class Searcher:
         self.time_limit = time_limit
         self.nodes = 0
         self.start_time = time.time()
+        self.searching = True
         if debug:
             d = kwargs['depth']
+            self.fail_soft = [0 for i in range(d)]
             moves, scores = self._search(g, d)
             i, score = argmax(scores)
             move = moves[i]
+            #print("fail_soft:")
+            #print(self.fail_soft)
         else:
-            for d in range(1,100):
+            for d in range(1,20):
+                #old_nodes = self.nodes
                 moves, scores = self._search(g, d)
+                #inc = self.nodes - old_nodes
+                #print("depth = %d, search nodes %d" % (d, inc))
                 i, score = argmax(scores)
                 move = moves[i]
                 if time.time() - self.start_time > time_limit:
@@ -124,4 +159,5 @@ class Searcher:
         #move = g.getIns(self.player_id, move)
         #print("moves = " , moves)
         print("scores = ", scores)
+        self.searching = False
         return move, score, d
