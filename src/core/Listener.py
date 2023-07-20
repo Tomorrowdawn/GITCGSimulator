@@ -92,7 +92,10 @@ class Summoned(Listener):
     Summoned提供一个update方法, 传递一个usage变量, 该变量通常是init_usage, 即发生重名时外部传入的可用次数.
     对于某些Summon来说, 这里需要定义叠加规则. 对于大多数Summon而言, 这里取两者之高.
     
-    注意, 快快缝补术不会调用update而是直接操控usage.
+    注意, 快快缝补术不会调用update而是直接操控usage. 
+    
+    usage降至0却不弃置的召唤物(如莫娜E之类的)需要重写discard方法. discard即尝试discard当前召唤物, 若成功, 会返回一个Discard事件.
+    Listener自带一个discard(若alive = False), 所以覆盖后可以令alive=False后调用super().discard()来生成事件, 避免自己写错.
     
     除usage外, Summon存在以下**类**变量:
     
@@ -116,16 +119,17 @@ class Summoned(Listener):
         self.usage = self.init_usage
     def record(self, name: str):
         raise NotImplementedError
-    
+    def discard(self, g, event):
+        if self.usage <= 0:
+            self.alive = False
+        return super().discard(g, event)
     def take_listen(self, g: GameInstance, event: Event) -> List[Event]:
         if type(event) is not EndPhase:
             return []
-        oppo = g.getactive(3 - event.player_id)
+        oppo = g.getactive(3 - self.loc.player_id)
         dmg = damage(self.loc,oppo, self.dtype, self.dvalue)
-        d = RawDMG(g.nexteid(), event.eid, event.player_id, [dmg])
+        d = RawDMG(g.nexteid(), event.eid, self.loc.player_id, [dmg])
         self.usage -= 1
-        if self.usage <= 0:
-            self.alive = False
         return [d]
     def update(self, usage):
         self.usage = min(self.usage, usage)

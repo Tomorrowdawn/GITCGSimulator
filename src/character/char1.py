@@ -23,7 +23,7 @@ class Diluc(Character):
     dice_cost = {
         'na':DicePattern(pyro=1,black=2),
         'skill':DicePattern(pyro=3),
-        'busrt':DicePattern(pyro=4),
+        'burst':DicePattern(pyro=4),
     }
     no_charge = []
     
@@ -49,7 +49,13 @@ class LargeWindSpirit(Summoned):
     init_usage = 3
     dtype = DMGType.anemo
     dvalue = 2
-    pass
+    def take_listen(self, g: GameInstance, event: Event.Event) -> List[Event]:
+        endphase_dmg = super().take_listen(g, event)
+        #event:Event.Reaction
+        if self.dtype != DMGType.anemo and type(event) == Event.Reaction and event.reaction_name == 'swirl':
+            if event.location.player_id != self.loc.player_id:
+                self.dtype = event.triggered_element
+        return endphase_dmg
 
 class Sucrose(Character):
     maxhp = 10
@@ -61,7 +67,7 @@ class Sucrose(Character):
     dice_cost = {
         'na':DicePattern(anemo=1,black=2),
         'skill':DicePattern(anemo=3),
-        'busrt':DicePattern(anemo=3),
+        'burst':DicePattern(anemo=3),
     }
     no_charge = []
     def na(self,g):
@@ -105,6 +111,8 @@ class GlacialWaltz(Buff):
                     dmg = damage(self.loc, oppo_active, DMGType.cryo, 2)
                     es.append(Event.RawDMG(g.nexteid(),event.eid,self.loc.player_id,[dmg]))
                     self.usage -= 1
+                if self.usage <= 0:
+                    self.alive = False
                 self.switch_id = -2
                 return es
             else:
@@ -122,7 +130,7 @@ class Kaeya(Character):
     dice_cost = {
         'na':DicePattern(cryo=1,black=2),
         'skill':DicePattern(cryo=3),
-        'busrt':DicePattern(cryo=4),
+        'burst':DicePattern(cryo=4),
     }
     no_charge = []
     

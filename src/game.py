@@ -64,6 +64,8 @@ class Game:
     def load(self, g:GameInstance):
         self.g = g
     def proceed(self, ins:Instruction, new_game, callback):
+        if ins.player_id != self.mover:
+            raise ValueError("Now it's not your turn!")
         if new_game:
             g = self.clone()
             g.g.proceed(ins, callback = callback)
@@ -112,6 +114,11 @@ class Game:
         
         valids返回的掩码对应上面的action列表. 需要提醒的是,最后两个行动每个都包含10个具体行动, 因此掩码会更长一些.
         """
+        def count(dp:DicePattern):
+            n = 0
+            for k,v in dp.to_dict().items():
+                n += v
+            return n
         keys = action.split(' ')
         ###V1全部使用万能骰
         g = self.g
@@ -119,11 +126,14 @@ class Game:
         if keys[0] in ('na','skill','burst','sp1','sp2'):
             active = g.getactive(player_id)
             c = g.get(active)
-            if dice.num() < 3:
+            costP = c.dice_cost[keys[0]]
+            dicen = count(costP)
+            cost = DiceInstance(omni = dicen)
+            if dice.num() < dicen:
                 return None
             if keys[0] == 'burst' and c.energy < c.maxenergy:
                 return None
-            return Ins.UseKit(player_id,DicePattern(omni=3),DicePattern(omni=3),DiceInstance(omni=3),keys[0])
+            return Ins.UseKit(player_id,costP,costP,cost,keys[0])
         elif keys[0] == 'switch':
             if dice.num() < 1:
                 return None

@@ -260,7 +260,17 @@ class GameInstance:
         new_instance:若为True, 则返回一个GameInstance的深拷贝. 
         这个选项一般在AI搜索中开启, 正式对局中没有必要拷贝对局.
         
-        callback:接收GameInstance和event参数(注意顺序)的函数, 返回一个事件.
+        callback:接收GameInstance, event, event_set, event_queue参数(注意顺序)的函数, 返回一个事件.
+        
+        event_set: event所引发的事件的集合. event_queue:队列中剩余的event集合(注意,Over事件已经提前压入队列)
+        无需深究内部实现, 这两个参数是为了让Agent可以在回调函数中执行模拟逻辑. 
+        
+        具体来说, agent生成一个事件e, 然后构造新的事件队列q = event_set + e + event_queue, 然后构造一个eh = EventHub(q).
+        最后, 调用eh.checkout(g.clone(), your_callback). 
+        
+        例子: 当P1 的 角色1使用技能导致P2 角色1阵亡后, P2需要思考选择角色0还是角色2出战. 这个时候就可以使用上述方法进行模拟.
+        使用回调函数而不是集成到proceed中是因为七圣召唤的死亡切换天然杂糅在整个事件结算过程中, 没法剥离出来.
+        
         一般callback下分别有两个玩家自己的策略, 顶级函数根据event.player_id分发事件.
         
         callback的常用参考是history['phase']变量.
@@ -509,6 +519,7 @@ class GameInstance:
             if event.kit != 'burst':
                 CE = ChargeEnergy(self.nexteid(), source, event.player_id, active_loc, 1)
             else:
+                assert active.energy == active.maxenergy
                 CE = ChargeEnergy(self.nexteid(), source, event.player_id, active_loc, -active.maxenergy)
         SM = SwapMove(self.nexteid(), event.eid, event.player_id, self.mover)
         kit = event.kit
