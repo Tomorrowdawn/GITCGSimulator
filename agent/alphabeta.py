@@ -25,20 +25,20 @@ class Searcher:
         dice_scores = 0
         buff_scores = 0
         if not p.history['endround']:
-            dice_scores = p.dice.num() * 2
+            dice_scores = p.dice.num() * 20
         else:
             dice_scores = 0
         for c in p.char:
             if c.hp > 0:
-                hp_scores += c.hp
+                hp_scores += c.hp * 10
                 energy_scores += c.energy
                 if c.aura != Aura.empty:
-                    aura_scores += -1
+                    aura_scores += -10
         for b in p.buff:
             if isinstance(b, GlacialWaltz) and len(p.getalives()) > 1:
-                buff_scores += b.usage * 2 * 0.7
+                buff_scores += b.usage * 2 * 7
         for s in p.summon:
-            summon_scores += s.dvalue * 0.7 + s.dvalue * (s.usage - 1) * 0.1
+            summon_scores += s.dvalue * 7
         return hp_scores + aura_scores + summon_scores + buff_scores + dice_scores + energy_scores
     def val(self, g:Game):
         if g.terminated():
@@ -66,7 +66,10 @@ class Searcher:
                 if self.searching:
                     val = self._alphabeta(game, -Searcher.WIN_SCORE, Searcher.WIN_SCORE, self.remain_depth)
                 else:
+                    self.searching = True
+                    #self.remain_depth = 7
                     val = self._alphabeta(game, -Searcher.WIN_SCORE, Searcher.WIN_SCORE, 7)
+                    self.searching = False
                 if event.player_id != game.mover:
                     val = -val
                 if val > best:
@@ -78,14 +81,25 @@ class Searcher:
     def _alphabeta(self, g:Game , alpha, beta, depth):
         self.remain_depth = depth - 1
         self.nodes += 1
-        if time.time() - self.start_time > self.time_limit:
-            return self.val(g)
+        #if time.time() - self.start_time > self.time_limit:
+        #    return self.val(g)
         if g.terminated():
             return self.val(g)
         if depth <= 0:
             return self.val(g)
-       # if depth <= 2 and self.val(g) + 5 < alpha:
+        #if depth <= 2 and self.val(g) + 5 < alpha:
         #    depth -= 1
+        #if depth % 2 == 0:
+            #ng = g.clone()
+        #    pds = g.g._getpds(g.g.mover)
+        #    omnibackup = pds.dice.dice.omni
+        #    pds.dice.dice.omni -= 2
+        #    if pds.dice.dice.omni < 0:
+        #        pds.dice.dice.omni = 0
+        #    val = self._alphabeta(g, alpha,beta,depth - 3)##自损裁剪
+        #    pds.dice.dice.omni = omnibackup
+        #    if val >= beta:
+        #        return beta
         def moves():
             for move in ['burst', 'skill','na','switch next','switch previous','end round']:
                 ins = g.getIns(g.mover, move)
@@ -109,7 +123,7 @@ class Searcher:
         self.nodes += 1
         self.remain_depth = depth - 1
         def moves():
-            for move in ['burst', 'skill','na','switch next','switch previous','end round']:
+            for move in ['burst', 'skill','na', 'switch next','switch previous','end round']:
                 ins = g.getIns(g.mover, move)
                 if ins is not None:
                     yield ins
