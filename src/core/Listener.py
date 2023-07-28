@@ -132,7 +132,7 @@ class Summoned(Listener):
         self.usage -= 1
         return [d]
     def update(self, usage):
-        self.usage = min(self.usage, usage)
+        self.usage = max(self.usage, usage)
     
 class Buff(Listener):
     """

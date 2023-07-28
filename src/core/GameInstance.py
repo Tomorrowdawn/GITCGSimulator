@@ -435,8 +435,9 @@ class GameInstance:
     @translate.register
     def switch(self, ins:Ins.Switch):
         active_loc = self.getactive(ins.player_id)
-        return [Switch(self.nexteid(),-1,ins.player_id, active_loc, ins.direction, ins.dice_instance),
-                SwapMove(self.nexteid(),-1,ins.player_id, ins.player_id)]
+        sid = self.nexteid()
+        return [Switch(sid,-1,ins.player_id, active_loc, ins.direction, ins.dice_instance),
+                SwapMove(self.nexteid(), sid ,ins.player_id, ins.player_id)]
     @translate.register
     def endround(self, ins:Ins.EndRound):
         return [EndRound(self.nexteid(), -1 ,ins.player_id)]

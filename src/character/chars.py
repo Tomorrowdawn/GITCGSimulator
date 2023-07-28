@@ -1,1 +1,1 @@
-from src.character.char1 import Diluc, Sucrose, Kaeya
+from src.character.char1 import Diluc, Sucrose, Kaeya, Fischl

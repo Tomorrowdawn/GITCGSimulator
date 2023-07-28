@@ -150,6 +150,43 @@ class Kaeya(Character):
     def sp2(self,g):
         pass
 
+class Oz(Summoned):
+    init_usage = 2
+    dtype = DMGType.electro
+    dvalue = 1
+    
+class Fischl(Character):
+    maxhp = 10
+    maxenergy = 3
+    faction = 'Mondstadt'
+    weapontype = 'Bow'
+    element = 'electro'
+    
+    dice_cost = {
+        'na':DicePattern(electro=1,black=2),
+        'skill':DicePattern(electro=3),
+        'burst':DicePattern(electro=3),
+    }
+    no_charge = []
+    
+    def na(self,g:GameInstance):
+        dmg_list = g.make_damage(self.loc.player_id, 'active',2,DMGType.physical)
+        return [Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list),]
+    def skill(self,g:GameInstance):
+        dmg_list = g.make_damage(self.loc.player_id, 'active',1,DMGType.electro)
+        dmg = Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list)
+        summon = Event.Summon(g.nexteid(),-1, self.loc.player_id, Oz)
+        return [dmg, summon]
+    def burst(self,g:GameInstance):
+        dmg_list = g.make_damage(self.loc.player_id, 'active',4,DMGType.electro)
+        dmg_list += g.make_damage(self.loc.player_id, 'standby', 2, DMGType.pierce)
+        dmg = Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list)
+        return [dmg,]
+    def sp1(self,g):
+        pass
+    def sp2(self,g):
+        pass
+
 if __name__ == "__main__":
     D = Diluc()
     from src.core.base import Location

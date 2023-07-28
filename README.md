@@ -21,7 +21,9 @@ g.initiate(state)
 
 对于AI开发而言,`g.proceed`和`g.getIns`是最重要的两个方法, 我们在此作简单介绍:
 
-proceed(ins, new_game, callback). ins是一条指令Instruction, new_game是一个布尔变量, 如果为真, 则proceed将返回一个深拷贝Game(同时保持现有Game不变), 这很有利于搜索. callback是一个接受两参数`gameinstance, event`的函数, 当死亡,掷骰时会调用该函数. callback并未区分玩家, 因此需要在callback内部进行判断(通常根据event.player_id进行区分). 注意, GITCGSim中玩家id为1或者2.
+proceed(ins, new_game, callback). ins是一条指令Instruction, new_game是一个布尔变量, 如果为真, 则proceed将返回一个深拷贝Game(同时保持现有Game不变), 这很有利于搜索. callback是一个接受四参数`gameinstance, event, event_set, event_queue`的函数, 当死亡,掷骰时会调用该函数. callback并未区分玩家, 因此需要在callback内部进行判断(通常根据event.player_id进行区分). 注意, GITCGSim中玩家id为1或者2.
+
+callback可以利用event_set和event_queue进行模拟. 具体来说, callback根据event生成可能的事件`e`, 然后重新组合`q = event_set + [e] + event_queue`, 得到正确的事件队列, 再新建一个EventHub`eh = EventHub(q)`, 最后调用`eh.checkout(g,callback)`, 则可以得到上述所有事件执行完毕后的游戏状态. 搜索该局面就可以得到这次选择的分数, 进而指导ai进行选择. 
 
 getIns(player_id, ins)接受player_id和一个字符串, 返回None(如果行动非法)或者Instruction(但DiceInstance及可能的其他参数(譬如胡桃拆哪个)需要在外部指明). ins字符串如下:
 
