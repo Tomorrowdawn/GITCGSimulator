@@ -38,7 +38,7 @@ class Searcher:
             if isinstance(b, GlacialWaltz) and len(p.getalives()) > 1:
                 buff_scores += b.usage * 2 * 7
         for s in p.summon:
-            summon_scores += s.dvalue * 7
+            summon_scores += s.dvalue * s.usage * 7
         return hp_scores + aura_scores + summon_scores + buff_scores + dice_scores + energy_scores
     def val(self, g:Game):
         if g.terminated():

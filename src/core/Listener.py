@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+
 sys.path.append("..")
 sys.path.append("../..")
 
@@ -23,6 +24,8 @@ class Listener(metaclass = ABCMeta):
     """
     实现take_listen方法. 如果中间出现用尽等情况, 只需要置alive=False.
     不要自己调用dicard,因为外部已经调用过了.
+    
+    注意usage=0并不意味alive=False. 如果你不清楚外部情况, 手动置alive=False总没错.
     """
     
     _vars = ['usage']
@@ -95,7 +98,9 @@ class Summoned(Listener):
     注意, 快快缝补术不会调用update而是直接操控usage. 
     
     usage降至0却不弃置的召唤物(如莫娜E之类的)需要重写discard方法. discard即尝试discard当前召唤物, 若成功, 会返回一个Discard事件.
-    Listener自带一个discard(若alive = False), 所以覆盖后可以令alive=False后调用super().discard()来生成事件, 避免自己写错.
+    Listener自带一个discard(若alive = False), 
+    所以覆盖后可以令alive=False后调用super(Summoned, self).discard()来生成事件, 避免自己写错.
+    注意super语法.
     
     除usage外, Summon存在以下**类**变量:
     
@@ -140,14 +145,36 @@ class Buff(Listener):
     
     usage:同Listener
     is_shield: 是否是一个护盾状态
+    
+    init_usage:初始可用次数
     """
     init_usage = 0
     is_shield = False
     def __init__(self) -> None:
         super().__init__()
         self.usage = self.init_usage
-    pass
+    def update(self,usage):
+        self.usage = max(self.usage, usage)
     
+
+class CharBuff(Listener):
+    """
+    CharBuff和Buff非常类似.
+    
+    usage:同Listener
+    
+    类变量:
+    is_shield: 是否是一个护盾状态
+    init_usage:初始可用次数
+    """
+    init_usage = 0
+    is_shield = False
+    def __init__(self) -> None:
+        super().__init__()
+        self.usage = self.init_usage
+    def update(self,usage):
+        self.usage = max(self.usage, usage)
+
 class Weapon(Listener):
     """
     weapontype:sword, claymore, catalyst, bow, polearm
@@ -161,3 +188,101 @@ class Artifact(Listener):
 
 class Talent(Listener):
     pass
+
+class ShieldBuff(Buff):
+    """
+    总是保护出战角色的护盾.
+    
+    修改init_usage来控制初始量. update默认不可叠加.
+    
+    若有特殊效应, 需要重写take_listen.
+    """
+    init_usage = 1
+    is_shield = True
+    def take_listen(self, g: GameInstance, event):
+        if type(event) != DealDMG:
+            return []
+        active_loc = g.getactive(self.loc.player_id)
+        #e_list = []
+        for dmg in event.final_dmg_list:
+            if dmg.dmgtype == DMGType.pierce:
+                continue
+            if dmg.target == active_loc:
+                if dmg.dmgvalue < self.usage:
+                    self.usage -= dmg.dmgvalue
+                    dmg.dmgvalue = 0
+                else:
+                    dmg.dmgvalue -= self.usage
+                    self.usage = 0
+                    self.alive = False
+                    break
+        return []
+    
+class ShieldCharBuff(CharBuff):
+    """
+    仅保护所附属角色的护盾. update默认不可叠加
+    
+    通过init_usage控制.
+    """
+    
+    init_usage = 2
+    is_shield = True
+    def take_listen(self, g: GameInstance, event):
+        if type(event) != DealDMG:
+            return []
+        loc = Location(self.loc.player_id, self.loc.area, self.loc.index)
+        #e_list = []
+        for dmg in event.final_dmg_list:
+            if dmg.dmgtype == DMGType.pierce:
+                continue
+            if dmg.target == loc:
+                if dmg.dmgvalue < self.usage:
+                    self.usage -= dmg.dmgvalue
+                    dmg.dmgvalue = 0
+                else:
+                    dmg.dmgvalue -= self.usage
+                    self.usage = 0
+                    self.alive = False
+                    break
+        return []
+
+class CrystallizeShield(ShieldBuff):
+    is_shield = True
+    init_usage = 1
+    def update(self, usage):
+        self.usage += usage
+        self.usage = min(2, self.usage)
+    
+    
+#TODO:
+class CatalyzingField(Buff):
+    init_usage = 2
+    def take_listen(self, g: GameInstance, event):
+        if type(event) == DMG or type(event) == Reaction:
+            for dmg in event.dmg_list:
+                if dmg.attacker.player_id == self.loc.player_id:
+                    if dmg.dmgtype == DMGType.electro or dmg.dmgtype == DMGType.dendro:
+                        dmg.dmgvalue += 1
+                        self.usage -= 1
+                        if self.usage <= 0:
+                            self.alive = False
+                            break
+        return []
+
+class DendroCore(Buff):
+    init_usage = 1
+    def take_listen(self, g: GameInstance, event):
+        if type(event) == DMG or type(event) == Reaction:
+            for dmg in event.dmg_list:
+                if dmg.attacker.player_id == self.loc.player_id:
+                    if dmg.dmgtype == DMGType.electro or dmg.dmgtype == DMGType.pyro:
+                        dmg.dmgvalue += 2
+                        self.usage -= 1
+                        if self.usage <= 0:
+                            self.alive = False
+                            break
+        return []
+
+class BurningFlame(Summoned):
+    dtype = DMGType.pyro
+    dvalue = 1

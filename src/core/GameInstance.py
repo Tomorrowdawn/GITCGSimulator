@@ -492,13 +492,12 @@ class GameInstance:
     
     @execute.register
     def dmg(self, event:DMG):
-        ##TODO:转换成DealDMG
         return [DealDMG(self.nexteid(), event.eid, event.player_id, event.dmg_list)]
     
     @execute.register
     def reaction(self, event:Reaction):
-        ###TODO: 有副作用的反应先不实现(结晶, 草反应, 超载)
-        return [DealDMG(self.nexteid(), event.eid, event.player_id, event.dmg_list)]
+        subeffects = reaction_subeffect(self,event)
+        return subeffects + [DealDMG(self.nexteid(), event.eid, event.player_id, event.dmg_list)]
     
     
     @execute.register
@@ -506,9 +505,15 @@ class GameInstance:
         ###调用injure等.
         events = []
         for dmg in event.final_dmg_list:
-            if dmg.dmgvalue > 0:
+            if dmg.dmgvalue >= 0:###可能有伤害是被护盾抵挡至0的
+                ###这里要完成冻结加伤.
                 target = self.get(dmg.target)
                 target:Character
+                if target.history['frozen'] and (
+                    dmg.dmgtype == DMGType.pyro or dmg.dmgtype == DMGType.physical
+                ):
+                    dmg.dmgvalue += 2
+                    target.history['frozen'] = False
                 deaths = target.injure(dmg.dmgvalue, event.eid, self)
                 events += deaths
                 #print("deaths = ", deaths)
@@ -613,7 +618,7 @@ class GameInstance:
     
     @execute.register
     def summon(self, event:Summon):
-        pds = self._getpds(event.player_id)
+        pds = self._getpds(event.target_player_id)
         index = self._search_listener(event.summoned, pds.summon)
         if index == -1:
             if len(pds.summon) >= 4:
@@ -629,7 +634,8 @@ class GameInstance:
         return []
     @execute.register
     def createbuff(self, event:CreateBuff):
-        pds = self._getpds(event.player_id)
+        pid = event.target_player_id
+        pds = self._getpds(pid)
         index = self._search_listener(event.buff, pds.buff)
         if index == -1:
             b = event.buff()
@@ -637,9 +643,21 @@ class GameInstance:
             b.place(loc)
             pds.buff.append(b)
         else:
-            pds.buff[index].usage = event.buff.init_usage
+            pds.buff[index].update(event.buff.init_usage)
         return []
-        
+    @execute.register
+    def createcharbuff(self, event:CreateCharBuff):
+        loc = event.char_loc
+        char = self.get(loc)
+        index = self._search_listener(event.char_buff, char.buff)
+        if index == -1:
+            b = event.char_buff()
+            loc = Location(event.player_id,'Char',loc.index, 'buff', len(char.buff))
+            b.place(loc)
+            char.buff.append(b)
+        else:
+            char.buff[index].update(event.buff.init_usage)
+        return []
 
     @execute.register
     def over(self, event:Over):
@@ -695,7 +713,7 @@ class GameInstance:
     def endphase(self, event:EndPhase):
         ###最重要的维护history的部分.
         ###几乎所有history变量在这里都需要重置, 除了total_use.
-        ##特别乐的是startphase要在endphase维护.
+        ##特别乐的是startphase要在endphase维护(因为startphase在roll之后)
         first = self.mover
         pfirst = self._getpds(first)
         psecond = self._getpds(3 - first)
@@ -908,3 +926,34 @@ def reaction(target_aura:List[Aura],  target_loc:Location,
         target_aura[target] = t
         return target_aura, r
     return target_aura, []
+
+from src.core.Listener import CrystallizeShield, CatalyzingField, BurningFlame, DendroCore
+
+def reaction_subeffect(g:GameInstance, event:Reaction):
+    """
+    该函数返回一个事件列表; 但冻结不会返回事件列表而是直接修改history.
+    """
+    
+    #plus_one = ['burning','bloom','frozen','quicken']
+    if event.reaction_name not in ('crystallize','overloaded','burning','bloom','frozen','quicken'):
+        return []
+    elif event.reaction_name == 'frozen':
+        char = g.get(event.location)
+        char.history['frozen'] = True
+        return []
+    elif event.reaction_name == 'crystallize':
+        e = CreateBuff(g.nexteid(), event.eid, event.player_id, event.location.player_id, CrystallizeShield)
+        return [e]
+    elif event.reaction_name == 'quicken':
+        e = CreateBuff(g.nexteid(),event.eid, event.player_id,event.location.player_id, CatalyzingField)
+        return [e]
+    elif event.reaction_name == 'bloom':
+        e = CreateBuff(g.nexteid(), event.eid, event.player_id, event.location.player_id, DendroCore)
+        return [e]
+    elif event.reaction_name == 'burning':
+        e = Summon(g.nexteid(), event.eid, event.player_id, event.location.player_id, BurningFlame)
+        return [e]
+    elif event.reaction_name == 'overloaded':
+        e = Switch(g.nexteid(), event.eid, event.player_id, event.location, 1)
+        return [e]
+    return []

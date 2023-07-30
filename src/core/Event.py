@@ -153,7 +153,11 @@ class Heal(Event):
     
 @dataclass
 class Reaction(Event):
-    location:Location##
+    location:Location
+    ##在哪个地方发生了反应, 
+    # 这必然是一个角色的位置. 
+    # 注意该location可能与player_id不同, 
+    # 以location为准, player_id仅表示这是谁触发的
     reaction_name:str
     trigger_element:DMGType
     triggered_element:DMGType
@@ -200,10 +204,12 @@ class ExchangeCard(Event):
 @dataclass
 class Summon(Event):
    ##which side's summon area
+    target_player_id:int
     summoned:Any
 
 @dataclass
 class CreateBuff(Event):
+    target_player_id:int
     buff:Any
 
 @dataclass
@@ -213,15 +219,17 @@ class CreateCharBuff(Event):
 
 @dataclass
 class CreateSupport(Event):
+    target_player_id:int
     support:Any
 
 @dataclass
 class Equip(Event):
     char_loc:Location
-    equipment:Any
+    equipment:Any###equipment的类变量中包含了具体是天赋,武器还是圣遗物
 
 @dataclass
 class CreateHandListener(Event):
+    target_player_id:int
     handlistener:Any
     
 @dataclass

@@ -84,7 +84,7 @@ class Sucrose(Character):
         dmg_list = g.make_damage(self.loc.player_id, 'active',1,DMGType.anemo)
         pid = self.loc.player_id
         dmg =  Event.RawDMG(g.nexteid(),-1,pid,dmg_list)
-        summon = Event.Summon(g.nexteid(), -1 ,pid, LargeWindSpirit)
+        summon = Event.Summon(g.nexteid(), -1 ,pid, pid , LargeWindSpirit)
         return [summon, dmg]
     def sp1(self,g):
         pass
@@ -143,7 +143,7 @@ class Kaeya(Character):
     def burst(self,g:GameInstance):
         dmg_list = g.make_damage(self.loc.player_id, 'active',1,DMGType.cryo)
         dmg = Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list)
-        buff = Event.CreateBuff(g.nexteid(),-1,self.loc.player_id, GlacialWaltz)
+        buff = Event.CreateBuff(g.nexteid(),-1,self.loc.player_id, self.loc.player_id, GlacialWaltz)
         return [dmg, buff]
     def sp1(self,g):
         pass
@@ -175,7 +175,7 @@ class Fischl(Character):
     def skill(self,g:GameInstance):
         dmg_list = g.make_damage(self.loc.player_id, 'active',1,DMGType.electro)
         dmg = Event.RawDMG(g.nexteid(),-1,self.loc.player_id,dmg_list)
-        summon = Event.Summon(g.nexteid(),-1, self.loc.player_id, Oz)
+        summon = Event.Summon(g.nexteid(),-1, self.loc.player_id, self.loc.player_id, Oz)
         return [dmg, summon]
     def burst(self,g:GameInstance):
         dmg_list = g.make_damage(self.loc.player_id, 'active',4,DMGType.electro)

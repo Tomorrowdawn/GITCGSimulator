@@ -8,6 +8,7 @@ class Location:
     ###仅用于装备/角色状态定位
     subarea:str = '' ### empty if you only need character. else it's weapon/artifact/talent/buff
     offset:int = 0 ##only available if subarea=buff.
+
     
 @dataclass
 class DiceInstance:
