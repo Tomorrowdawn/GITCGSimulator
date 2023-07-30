@@ -36,9 +36,14 @@ def fake_callback(*args):
     return Event.Event(-1,-1,-1)
 
 class Game:
-    def __init__(self):
-        self.g = None
-        pass
+    def __init__(self, gs = None):
+        """
+        注意gs暂时不支持中途加载
+        """
+        if gs == None:
+            self.g = None
+        else:
+            self.g = GameInstance(activate(gs.clone()))
     def clone(self)->"Game":
         newgame = Game()
         newgame.load(self.g.clone())
@@ -53,13 +58,13 @@ class Game:
         pass
     def choose_active(self,player_id, active):
         self.g.choose_active(player_id, active)
-    def initiate(self,gs:GameState):
-        self.g = GameInstance(activate(gs.clone()))
-        self.g.choose_active(1,0)
-        self.g.choose_active(2,0)
-        start = Event.EndPhase(0,-1,1)
-        self.g.history['mover'] = 1
-        self.g._issue(Event.Over(0,-1,1, start), fake_callback)
+    def initiate(self, p1_active, p2_active, callback):
+        self.g.choose_active(1, p1_active)
+        self.g.choose_active(2, p2_active)
+       # start = Event.EndPhase(0,-1,1)
+       # self.g.history['mover'] = 1
+       # self.g._issue(Event.Over(0,-1, 1, start), callback)
+        self.g._issue(Event.GameStart(0,-1,1), callback)
         assert self.g.history['mover'] == 1
     def load(self, g:GameInstance):
         self.g = g

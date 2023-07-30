@@ -236,6 +236,9 @@ class PlayerInstance:
         p.history = picklecopy(self.history)
         ##TODO:
         return p
+    
+#######################################
+
 class GameInstance:
     """提供方便的接口修改游戏状态, 执行事件,并可以导出GameState"""
     def __init__(self,g:GameState) -> None:
@@ -663,8 +666,25 @@ class GameInstance:
         elif type(event.overed) == RollPhase:
             self.history['phase'] = 'start'
             return [StartPhase(self.nexteid(), event.eid, event.player_id)]
+        elif isinstance(event.overed, GameStart):
+            self.history['phase'] = 'roll'
+            start = EndPhase(0,-1,1)
+            return [Over(0,-1, 1, start)]
         return []
     
+    
+    @execute.register
+    def gamestart(self,event:GameStart):
+        self.history['mover'] = 1
+        e = []
+        for c in self.p1.char:
+            e += c.passive(self)
+        for c in self.p2.char:
+            e += c.passive(self)
+        e.append(DrawCard(self.nexteid(),-1, 1, 5, 'firstfive'))
+        e.append(DrawCard(self.nexteid(),-1, 2, 5, 'firstfive'))
+        self.history['phase'] = 'firstfive'
+        return e
     
     @execute.register
     def endround(self, event:EndRound):
@@ -688,7 +708,7 @@ class GameInstance:
     @execute.register
     def rollphase(self, event:RollPhase):
         ###TODO: V1跳过重骰阶段. 
-        ## 注意rollphase需要两个人重骰.
+        ## 注意rollphase需要两个人重骰. 
         return []
     @execute.register
     def startphase(self, event:StartPhase):
@@ -706,6 +726,8 @@ class GameInstance:
     
     @execute.register
     def drawcard(self, event:DrawCard):
+        ###filter支持字符串或者函数.
+        ##现有字符串:firstfive
         return []
     
 def swap_ele(e1,e2):

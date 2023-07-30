@@ -16,6 +16,10 @@ class Over(Event):
     pass
     
 @dataclass
+class GameStart(Event):
+    pass
+
+@dataclass
 class EndRound(Event):
     pass###注意维护history,比如plunge等.
     
@@ -93,15 +97,17 @@ class UseKit(Event):
     dice_cost:DiceInstance = None
 
 class DMGType(Enum):
-    pyro = 0
-    hydro = 1
-    dendro = 2
-    cryo = 3
-    geo = 4
-    anemo = 5
-    electro = 6
-    physical = 7
-    pierce = 8
+    physical = 0
+    pyro = 1
+    cryo = 2
+    electro = 3
+    hydro = 4
+    dendro = 5
+    crydendro = 6
+    anemo = 7
+    geo = 8
+    #physical = 9
+    pierce = 9
 
 @dataclass
 class damage:

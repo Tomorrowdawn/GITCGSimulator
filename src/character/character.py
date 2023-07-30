@@ -170,6 +170,9 @@ class Character(metaclass = ABCMeta):
         'na':None,'skill':None,'burst':DicePattern()
     }
     
+    def passive(self, g):
+        return []
+    
     @abstractmethod
     def na(self,g):
         pass
