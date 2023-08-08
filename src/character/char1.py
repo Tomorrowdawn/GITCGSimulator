@@ -49,12 +49,13 @@ class LargeWindSpirit(Summoned):
     init_usage = 3
     dtype = DMGType.anemo
     dvalue = 2
+    _vars = ['usage','dtype']
     def take_listen(self, g: GameInstance, event: Event.Event) -> List[Event]:
         endphase_dmg = super().take_listen(g, event)
         #event:Event.Reaction
         if self.dtype == DMGType.anemo and type(event) == Event.Reaction and event.reaction_name == 'swirl':
             if event.location.player_id != self.loc.player_id:
-                self.dtype = event.triggered_element
+                self.dtype = event.trigger_element
         return endphase_dmg
 
 class Sucrose(Character):

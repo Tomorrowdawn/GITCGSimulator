@@ -1,5 +1,5 @@
 from dataclasses import dataclass, replace
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import List, Tuple, Dict, Callable, Mapping, Any
 from src.core.base import Location, DiceInstance, DicePattern
 
@@ -96,7 +96,7 @@ class UseKit(Event):
     kit_type:str##na,skill,burst
     dice_cost:DiceInstance = None
 
-class DMGType(Enum):
+class DMGType(IntEnum):
     physical = 0
     pyro = 1
     cryo = 2
@@ -159,8 +159,8 @@ class Reaction(Event):
     # 注意该location可能与player_id不同, 
     # 以location为准, player_id仅表示这是谁触发的
     reaction_name:str
-    trigger_element:DMGType
-    triggered_element:DMGType
+    trigger_element:DMGType###先手元素
+    triggered_element:DMGType##后手元素
     dmg_list:List[damage]
     ###默认dmg_list是已经处理好增伤的列表(主要是因为扩散可能导致相当复杂的结算,需要当场算出来).
     ###EventExecute需要处理的是副作用(激化领域, 结晶盾, etc)
@@ -237,6 +237,7 @@ class Discard(Event):
     ##执行Discard以删除监听器
     ##area需要自行维护alive列表(增删改查的时候. listen已经进行了前置检查)
     discard_loc:Location
+    discard_name:str
     ## discard需要检查一下是否为frozenlistener. 如果是,还需要修改char那边的frozen.
     
 @dataclass

@@ -145,7 +145,7 @@ class Searcher:
                 #self.fail_soft[self.remain_depth] += 1
                 return actions, scores
         return actions, scores
-    def search(self, time_limit, g:Game, debug = False, **kwargs):
+    def search(self, g:Game, time_limit , debug = False, verbose = False, **kwargs):
         def argmax(array):
             return max(list(enumerate(array)), key=lambda x: x[1])
         self.time_limit = time_limit
@@ -172,6 +172,10 @@ class Searcher:
                     break
         #move = g.getIns(self.player_id, move)
         #print("moves = " , moves)
-        print("scores = ", scores)
+        if verbose:
+            print("scores = ", scores)
         self.searching = False
-        return move, score, d
+        if verbose:
+            return move, score, d
+        else:
+            return move

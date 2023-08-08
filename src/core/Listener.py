@@ -36,8 +36,9 @@ class Listener(metaclass = ABCMeta):
         pass
     
     def record(self, name:str):
-        """调用此方法来记录该类想要导出的成员变量. 
-        尽管如此, 我们推荐手动配置_vars变量, 因为这样更快.
+        """调用此方法来记录该类想要导出的成员变量. 常见于__init__方法中.
+        注意, Observer需要_vars来确定如何哪些数据是必要的, 因此想要借助神经网络训练的代码都必须确定_vars无误.
+        (可以手动赋值, 但这样会覆盖原先的_vars,请确保自己完全确定所有变量均被囊括).
         
         如, self.a = 1
         self.record('a')
@@ -79,7 +80,7 @@ class Listener(metaclass = ABCMeta):
     
     def discard(self, g, event):
         if self.alive == False:
-            return [Discard(g.nexteid(), event.eid, event.player_id, self.loc)]
+            return [Discard(g.nexteid(), event.eid, event.player_id, self.loc, type(self).__name__)]
         return []
     
     @abstractmethod

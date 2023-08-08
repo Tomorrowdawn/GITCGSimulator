@@ -17,6 +17,7 @@ from src.core.Listener import Buff, Summoned, CharBuff
 
 class Senho(CharBuff):
     init_usage = 1
+    _vars = ['usage','fusion']
     def __init__(self) -> None:
         self.fusion = False
         super().__init__()

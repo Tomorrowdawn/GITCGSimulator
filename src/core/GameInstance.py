@@ -81,6 +81,8 @@ class DicePool:
                 self._add(generated)
             else:
                 raise "Unknown dice type"
+    def __getitem__(self, key):
+        return self.dice[key]
     def consume(self, dice_instance:DiceInstance):
         if dice_instance is None:
             return
@@ -92,8 +94,7 @@ class DicePool:
         if self.dice.omni < 0:
             raise Exception("Not Enough Dices")
         pass
-    pass
-
+    
 def loadchar(name, profile):
     c = name2char(name)
     c.restore(profile)
@@ -115,7 +116,7 @@ class PlayerInstance:
         self.dice = DicePool(g.dice)
         self.history = g.history
         self.buff = []
-        #self.support = []
+        self.support = []
         self.summon:List[Summoned] = []
         ##TODO: 别忘了place
         pass
@@ -139,19 +140,34 @@ class PlayerInstance:
                 l.loc.index = i
             else:
                 l.loc.offset = i
-    
-    def rmListener(self, loc:Location):
+    def search_listener(self, listener_list, name):
+        index = -1
+        for i, l in enumerate(listener_list):
+            if type(l).__name__ == name:
+                index = i
+                break
+        return index
+    def rmListener(self, loc:Location, name:str):
         area = loc.area
         area = area.lower()
         Area = self.__dict__[area]
-        if area != 'Char':
+        #print("location = ", loc)
+        #print("Area = ", Area)
+        if area != 'char':
             Area:list
-            Area.pop(loc.index)
+            index = self.search_listener(Area, name)
+            #try:
+            Area.pop(index)
+            #except IndexError as e:
+            #    print("an error occurs when discard some listener")
+            #    print("location = ", loc)
+            #    print("Area = ", Area)
+            #    raise e
             self.places(Area)
         else:
             char = Area[loc.index]
             if loc.subarea == '':
-                return char
+                return char##FIXME:
             elif loc.subarea == 'talent':
                 return char.talent
             elif loc.subarea == 'weapon':
@@ -159,7 +175,10 @@ class PlayerInstance:
             elif loc.subarea == 'artifact':
                 return char.artifact
             else:
-                char.buff.pop(loc.offset)
+                offset = self.search_listener(char.buff, name)
+                if offset == -1:
+                    raise ValueError("non-exsiting listener " + name)
+                char.buff.pop(offset)
                 self.places(char.buff,re_index=False)
     def getListeners(self)->List[Listener]:
         ls = list()
@@ -613,7 +632,7 @@ class GameInstance:
     def discard(self, event:Discard):
         loc = event.discard_loc
         pds = self._getpds(loc.player_id)
-        pds.rmListener(loc)
+        pds.rmListener(loc, event.discard_name)
         return []
     
     @execute.register
@@ -677,6 +696,7 @@ class GameInstance:
                     [EndPhase(self.nexteid(), event.eid, event.player_id)]
         elif type(event.overed) == EndPhase:
             self.history['phase'] = 'roll'
+            self.history['rounds'] += 1
             first = self.mover
             ###TODO: V1全万能
             return [GenerateDice(self.nexteid(), event.eid, first, DicePattern(omni = 8)),

@@ -78,9 +78,13 @@ class Game:
         else:
             self.g.proceed(ins, callback = callback)
     def terminated(self):
-        if self.g.history['winner'] > 0:
+        if self.g.history['rounds'] > 8 or self.g.history['winner'] > 0:
             return True
         return False
+    @property
+    def winner(self):
+        return self.g.history['winner']
+    
     @property
     def mover(self):
         return self.g.history['mover']
