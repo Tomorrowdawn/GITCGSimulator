@@ -185,7 +185,7 @@ class MCTS:
         """
         self.pi可以获取策略概率分布.
         """
-        self.c_puct = 1/1.44
+        self.c_puct = 1.0
         self.nodes = 0
         self.pi = torch.ones(MOVE_CHOICES)/MOVE_CHOICES
         self.time_limit = time_limit
@@ -202,7 +202,7 @@ class MCTS:
                 valids[i] = 1
         policy = policy.cpu()
         if noised:
-            policy = 0.75 * policy + 0.25 * np.random.dirichlet([1.0 for _ in policy])
+            policy = 0.75 * policy + 0.25 * np.random.dirichlet([1.5 for _ in policy])
         policy = policy * valids
         policy = policy / torch.sum(policy)
         root = MCTS.Node(None, g, policy, valids, self.obs)
@@ -372,7 +372,7 @@ class Trainer:
         path = self.checkpoint_root + '/' + name
         state_dict = {
             'model':self.algo.net.state_dict(),
-            'dataset':dataset
+            #'dataset':dataset
         }
         torch.save(state_dict,path)
     def learn(self, trainset:GIDataset):

@@ -10,6 +10,11 @@ class Event:
     player_id:int###用于获取监听器顺序, 也可以用来表明是谁引发的事件
 
 @dataclass
+class DiceWrap:
+    origin_event:Event
+    dice_pattern:DicePattern
+
+@dataclass
 class Over(Event):
     ##它的source_id就是结束的事件.
     overed:Event = None

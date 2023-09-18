@@ -24,6 +24,7 @@ class Listener(metaclass = ABCMeta):
     """
     实现take_listen方法. 如果中间出现用尽等情况, 只需要置alive=False.
     不要自己调用dicard,因为外部已经调用过了.
+    在极为特殊的情况下, 你需要在take_listen中自定义弃置代码并返回. 这容易导致不易发现的BUG, 请确保绝无其他方法.
     
     注意usage=0并不意味alive=False. 如果你不清楚外部情况, 手动置alive=False总没错.
     """

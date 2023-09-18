@@ -43,3 +43,12 @@ class DicePattern:
 
 def get_oppoid(player_id):
     return 3 - player_id
+
+def samecharcheck(loc1:Location, loc2:Location):
+    if loc1.player_id != loc2.player_id:
+        return False
+    if loc1.area != 'Char' or loc2.area != 'Char':
+        return False
+    if loc1.index != loc2.index:
+        return False
+    return True

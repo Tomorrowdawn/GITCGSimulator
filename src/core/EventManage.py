@@ -3,7 +3,7 @@ from __future__ import annotations
 本代码实现事件处理框架以及事件执行(分派)函数.
 """
 
-from src.core.Event import Event, Over, Death
+from src.core.Event import Event, Over, Death, DiceWrap
 from src.core.Listener import Listener
 from src.core.GameState import GameState
 from src.core.error import CallBackError
@@ -50,7 +50,7 @@ class EventHub:
                 queue.append(e)
             else:
                 raise CallBackError("no callback is provided however it's phase {}".format(g.history['phase']))
-        if type(event) is not Over:
+        if type(event) is not Over and type(event) is not DiceWrap:
             queue.append(Over(g.nexteid(),event.eid, event.player_id, event))
         return queue
                     

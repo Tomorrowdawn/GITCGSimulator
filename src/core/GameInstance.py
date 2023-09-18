@@ -39,14 +39,34 @@ class DicePool:
     def checkPattern(self, dice_pattern:DicePattern)->bool:
         """验证当前骰子是否支持该Pattern"""
         n = 0
-        for k,v in dice_pattern.to_dict().items():
-            n += v
-        dn = 0
-        for k, v in self.dice.to_dict().items():
-            dn += v
-        if n > dn:
+        d = self.dice.to_dict()
+        pure_element = ['pyro','electro','geo','anemo','dendro','hydro','cryo']
+        dn = d['omni']
+        dp = dice_pattern.to_dict()
+        for k in pure_element:
+            dn += d[k]
+            n += dp[k]
+            d[k] -= dp[k]
+            if d[k] < 0:
+                if d['omni'] <= 0:
+                    return False
+                else:
+                    d['omni'] += d[k]
+                    d[k] = 0
+        ##接下来检查白
+        white_dices = dp['white']
+        meet = False
+        for k in pure_element:
+            if d[k] + d['omni'] >= white_dices:
+                meet = True
+                break
+        if not meet:
             return False
-        return True##TODO: 目前全是万能(V1)
+        
+        ##以上均检查完后, 对于黑, 只需要数量足够就行了. 由于之前每方等额缩减 ,所以这里直接比总数就行了.
+        if dn < n:
+            return False
+        return True
     def _add(self, dices:List[str]):
         d = self.dice.to_dict()
         for die in dices:
@@ -88,13 +108,12 @@ class DicePool:
             return
         di = dice_instance.to_dict()
         n = 0
+        d = self.dice.to_dict()
         for k , v in di.items():
-            n += v
-        self.dice.omni -= n
-        if self.dice.omni < 0:
-            raise Exception("Not Enough Dices")
-        pass
-    
+            d[k] -= v
+            if d[k] < 0:
+                raise Exception("Not Enough {} Dices".format(k))
+        self.dice = DiceInstance(**d)
 def loadchar(name, profile):
     c = name2char(name)
     c.restore(profile)
@@ -453,12 +472,16 @@ class GameInstance:
         active = self.get(active_loc)
         active:Character
         t = active.skill_type[ins.kit]
-        return [UseKit(self.nexteid(), -1, ins.player_id, active_loc, ins.kit, t, ins.dice_instance)]
+        uk = UseKit(self.nexteid(), -1, ins.player_id, active_loc, ins.kit, t, ins.dice_instance)
+        dw = DiceWrap(uk, ins.dice_pattern)
+        return [dw]
     @translate.register
     def switch(self, ins:Ins.Switch):
         active_loc = self.getactive(ins.player_id)
         sid = self.nexteid()
-        return [Switch(sid,-1,ins.player_id, active_loc, ins.direction, ins.dice_instance),
+        sw = Switch(sid,-1,ins.player_id, active_loc, ins.direction, ins.dice_instance)
+        dw = DiceWrap(sw, ins.dice_pattern)
+        return [dw,
                 SwapMove(self.nexteid(), sid ,ins.player_id, ins.player_id)]
     @translate.register
     def endround(self, ins:Ins.EndRound):
@@ -489,6 +512,9 @@ class GameInstance:
         ##这里使用分派.
         raise TypeError("Unknown type {} for event".format(type(event)))
     
+    @execute.register
+    def dicewrap(self,event:DiceWrap):
+        return [event.origin_event]
     
     @execute.register
     def dmgtypecheck(self, event:DMGTypeCheck):
@@ -752,6 +778,12 @@ class GameInstance:
     def startphase(self, event:StartPhase):
         self.history['phase'] = 'combat'
         return []
+    
+    @execute.register
+    def diceprecal(self, event:DicePreCal):
+        ##do nothing
+        return []
+    
     @execute.register
     def generatedice(self, event:GenerateDice):
         pds = self._getpds(event.player_id)

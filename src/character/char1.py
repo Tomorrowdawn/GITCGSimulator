@@ -1,6 +1,5 @@
 from __future__ import annotations
 import sys
-
 sys.path.extend(['..','../..'])
 
 from src.character.character import Character
@@ -10,8 +9,8 @@ if TYPE_CHECKING:
     
 from src.core.Event import DMGType, Event, List, damage
 import src.core.Event as Event
-from src.core.base import DicePattern
-from src.core.Listener import Buff, Summoned
+from src.core.base import DicePattern, samecharcheck
+from src.core.Listener import Buff, Summoned, CharBuff
 
 class Diluc(Character):
     maxhp = 10
@@ -188,6 +187,60 @@ class Fischl(Character):
     def sp2(self,g):
         pass
 
+class ExplosiveSpark(CharBuff):
+    init_usage = 1
+    is_shield = False
+    def __init__(self) -> None:
+        super().__init__()
+        self.naid = -1
+        self.dpcusage = self.usage
+    def _reducedice(self, g:GameInstance, event, e):
+        """
+        e是usekit事件
+        event是外包装,可以是DiceWrap也可以是DicePrecal
+        """
+        
+        if type(e) is not Event.UseKit:
+            return False
+        e:Event.UseKit
+        pds = g._getpds(event.player_id)
+        if pds.dice.num() % 2 != 0:
+            return False
+        if not samecharcheck(e.cur_char, self.loc):
+            return False
+        if e.kit_type != 'na':
+            return False
+        if event.dice_pattern.pyro > 0:
+            event.dice_pattern.pyro -= 1
+        elif event.dice_pattern.black > 0:
+            event.dice_pattern.black -= 1
+        return True
+    def take_listen(self, g: GameInstance, event) -> List[Event]:
+        if type(event) is Event.DicePreCal:
+            self.dpcusage = self.usage
+            if self.dpcusage > 0:
+                self._reducedice(g, event, event.event_instance)
+                return []
+            return []
+        if type(event) is Event.DiceWrap:
+            ###注意我们不希望在这里discard,所以就算usage = 0也不要急着alive=False
+            if self.usage > 0:
+                if self._reducedice(g, event, event.origin_event):
+                    self.usage -= 1
+                    e = event.origin_event
+                    self.naid = e.eid
+                    return []
+            else:
+                return []
+        if type(event) is Event.DMG:
+            if event.source_id == self.naid:
+                e:Event.DMG = event
+                e.dmg_list[0].dmgvalue += 1
+            return []
+        if type(event) is Event.Over and event.overed.eid == self.naid:
+            self.naid = -1
+            self.alive = False
+            return []
 if __name__ == "__main__":
     D = Diluc()
     from src.core.base import Location

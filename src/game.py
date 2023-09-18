@@ -102,12 +102,19 @@ class Game:
     def getIns(self, player_id, action:str)->Union[Instruction,None]:
         """使用该方法获得一个指令原型,或者None(如果这非法)
         
-        指令原型中包含了该行动所需要支付的真实费用DicePattern.
-        你仍需要检查骰池以确定实际支付的骰子. 
+        指令原型中包含了该行动所需要支付的真实DicePattern.
+        
+        dice_pattern:原始消耗
+        real_dice_pattern:经过减费/增费后的消耗
+        dice_instance:当前你所拥有的骰子(等价于player.dice). 你需要将它替换为你真正需要消耗的DiceInstance.
+        
+        举例来说, 你有3火3雷, 那么返回的dice_instance就是3火3雷.
+        但如果你只需要3白来释放技能, 那么你需要确定自己用火还是雷, 然后将dice_instance替换成实际的消耗.
         
         一个标准的流程是:
         ins = getIns(name)
-        ins.dice_instance = choose_dice(ins.dice_pattern, dicepool)
+        ins.dice_instance = choose_dice(ins.real_dice_pattern, ins.dice_instance)
+        
         g = game.proceed(ins)
         
         action列表:
@@ -135,28 +142,43 @@ class Game:
         if keys[0] in ('na','skill','burst','sp1','sp2'):
             active = g.getactive(player_id)
             c = g.get(active)
+            kittype = c.skill_type[keys[0]]
             costP = c.dice_cost[keys[0]]
-            dicen = count(costP)
-            cost = DiceInstance(omni = dicen)
-            if dice.num() < dicen:
+            #dicen = count(costP)
+            #cost = DiceInstance(omni = dicen)
+            protoevent = Event.UseKit(-1, -1,player_id,active, keys[0],kittype, None)
+            dpcevent = Event.DicePreCal(-2, -1,player_id, protoevent, costP)
+            g._issue(dpcevent)
+            real_pattern = dpcevent.dice_pattern
+            if not dice.checkPattern(real_pattern):
                 return None
+            #if dice.num() < dicen:
+            #    return None
             if keys[0] == 'burst' and c.energy < c.maxenergy:
                 return None
-            return Ins.UseKit(player_id,costP,costP,cost,keys[0])
+            return Ins.UseKit(player_id,costP,real_pattern, dice ,keys[0])
         elif keys[0] == 'switch':
             if dice.num() < 1:
                 return None
             pds = g._getpds(player_id)
+            active = g.getactive(player_id)
             others = pds.getalives()
             if len(others) <= 1:
                 return None
-            proto = Ins.Switch(player_id, DicePattern(omni=1),DicePattern(omni=1), DiceInstance(omni=1), 1)
+            proto = Ins.Switch(player_id, DicePattern(black=1),None, dice, 1)
             if keys[1] == 'next':
                 proto.direction = 1
             else:
                 if len(others) == 2:
                     return None
                 proto.direction = -1
+            protoevent = Event.Switch(-1, -1, player_id, active, proto.direction)
+            dpcevent  = Event.DicePreCal(-2, -1,player_id, protoevent, DicePattern(black=1))
+            g._issue(dpcevent)
+            real_pattern = dpcevent.dice_pattern
+            if not dice.checkPattern(real_pattern):
+                return None 
+            proto.real_dice_pattern = real_pattern
             return proto
         elif keys[0] == 'end':
             return Ins.EndRound(player_id, None,None,None)

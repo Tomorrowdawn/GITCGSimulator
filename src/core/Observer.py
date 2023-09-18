@@ -93,6 +93,7 @@ class TensorObserver(Observer):
         history = torch.zeros(4)
         for i, h in enumerate(history_list):
             history[i] =  int(p.history[h])
+        
         embed.append(torch.tensor([p.dice.num()]))
         embed.append(history)
         public = embed
